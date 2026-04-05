@@ -334,6 +334,7 @@ hr.divider{border:none;border-top:1px solid var(--border);margin:16px 0;}
           <div class="time-big" id="uTimeHM"></div>
           <div class="time-sec" id="uTimeSec"></div>
           <span class="badge out" id="uBadge">未出勤</span>
+
         </div>
         <div class="btn-grid">
           <button class="punch-btn in-btn"  id="pIn"  onclick="punch('in')">
@@ -512,13 +513,26 @@ hr.divider{border:none;border-top:1px solid var(--border);margin:16px 0;}
 <!-- Add punch -->
 <div class="modal-overlay" id="addModal">
   <div class="modal">
-    <h3>打刻を追加</h3>
+    <h3 id="addModalTitle">打刻を追加</h3>
     <div class="field"><label>種別</label>
-      <select id="addType">
+      <select id="addType" onchange="onAddTypeChange()">
         <option value="in">出勤</option><option value="out">退勤</option>
         <option value="break">休憩開始</option><option value="return">休憩終了</option>
       </select></div>
     <div class="field"><label>時刻</label><input type="time" id="addTime" step="1"></div>
+    <!-- 退勤選択時のみ表示: 日付跨ぎオプション -->
+    <div id="crossDayOption" style="display:none;background:var(--amber-l);border:1px solid var(--amber);border-radius:8px;padding:12px 14px;margin-bottom:4px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--amber);">
+        <input type="checkbox" id="isCrossDay" onchange="onCrossDayChange()" style="width:16px;height:16px;">
+        翌日の退勤（日付跨ぎ）
+      </label>
+      <div id="crossDayDetail" style="display:none;margin-top:10px;">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">
+          自動で以下の3件が記録されます：<br>
+          <span id="crossDayPreview" style="font-family:var(--mono);font-size:11px;"></span>
+        </div>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal('addModal')">キャンセル</button>
       <button class="btn-primary" onclick="confirmAddLog()">追加</button>
@@ -681,7 +695,11 @@ function switchAdminTab(name) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CLOCK
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function startClock(){ updateClock(); clockInterval=setInterval(updateClock,1000); }
+function startClock(){
+  lastCheckedDate=todayStr();
+  updateClock();
+  clockInterval=setInterval(()=>{ updateClock(); checkDateChange(); },1000);
+}
 function stopClock(){ clearInterval(clockInterval); }
 function updateClock(){
   const now=new Date();
@@ -695,13 +713,67 @@ function updateClock(){
 // USER PAGE
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let uDay=null;
+let uDayDate=null; // uDayが対応する日付文字列
+
 function showUser(){
   document.getElementById('topUser').textContent=currentUser.display;
-  // set default date for expense form
   document.getElementById('expDate').value=todayStr();
   document.getElementById('userMonthPicker').value=nowMonthStr();
-  uDay=loadDay(currentUser.username,todayStr());
+  initUDay();
   renderUserUI(); startClock(); updateMailBadge(); showPage('userPage');
+}
+
+// uDayを今日の日付で初期化
+function initUDay(){
+  const today=todayStr();
+  uDay=loadDay(currentUser.username,today);
+  uDayDate=today;
+}
+
+// 日付が変わった瞬間を検知して自動退勤→自動出勤
+let lastCheckedDate=todayStr();
+function checkDateChange(){
+  const today=todayStr();
+  if(today===lastCheckedDate) return;
+  lastCheckedDate=today;
+
+  // 出勤中 or 休憩中なら前日に自動退勤を記録
+  if(uDay && (uDay.state==='in'||uDay.state==='break')){
+    const midnightTs=new Date(today+'T00:00:00').toISOString();
+    const midnightTimeStr='00:00:00';
+
+    // 休憩中なら休憩終了も自動挿入（23:59:59）
+    if(uDay.state==='break'){
+      const endBreakTs=new Date(uDayDate+'T23:59:59').toISOString();
+      uDay.logs.push({id:uid(),type:'return',timeStr:'23:59:59',ts:endBreakTs});
+      if(uDay.breakStart){
+        uDay.totalBreak+=new Date(endBreakTs)-new Date(uDay.breakStart);
+        uDay.breakStart=null;
+      }
+    }
+
+    // 23:59:59 に退勤を自動記録
+    const autoOutTs=new Date(uDayDate+'T23:59:59').toISOString();
+    uDay.logs.push({id:uid(),type:'out',timeStr:'23:59:59',ts:autoOutTs});
+    uDay.state='done'; uDay.outTime=autoOutTs;
+    saveDay(currentUser.username,uDayDate,uDay);
+
+    // 今日の新規データに切り替えて 00:00:00 に自動出勤
+    uDayDate=today;
+    uDay=loadDay(currentUser.username,today);
+    const autoInTs=new Date(today+'T00:00:00').toISOString();
+    uDay.logs.push({id:uid(),type:'in',timeStr:'00:00:00',ts:autoInTs});
+    uDay.state='in'; uDay.inTime=autoInTs;
+    saveDay(currentUser.username,uDayDate,uDay);
+
+    renderUserUI();
+    showToast('🌙 日付が変わりました。自動で退勤・出勤を記録しました。');
+  } else {
+    // 出勤していなければ今日のデータに切り替えるだけ
+    uDayDate=today;
+    uDay=loadDay(currentUser.username,today);
+    renderUserUI();
+  }
 }
 const typeMap={
   in:{label:'出勤',cls:'li-in',tagcls:'in'},
@@ -719,7 +791,7 @@ function punch(type){
     if(uDay.breakStart){uDay.totalBreak+=now-new Date(uDay.breakStart); uDay.breakStart=null;}
   }
   uDay.logs.push({id:uid(),type,timeStr,ts});
-  saveDay(currentUser.username,todayStr(),uDay);
+  saveDay(currentUser.username,uDayDate,uDay);
   renderUserUI(); showToast(typeMap[type].label+' を打刻しました');
 }
 function uid(){return Math.random().toString(36).slice(2,9);}
@@ -757,8 +829,10 @@ function updateSummary(now){
   document.getElementById('sWork').textContent=fmtMs(ms);
 }
 function userClearLog(){
-  if(!confirm('本日の打刻をリセットしますか？')) return;
-  uDay=defaultDay(); saveDay(currentUser.username,todayStr(),uDay);
+  if(!confirm('打刻をリセットしますか？')) return;
+  uDay=defaultDay();
+  saveDay(currentUser.username,uDayDate||todayStr(),uDay);
+  uDayDate=todayStr();
   renderUserUI(); showToast('リセットしました');
 }
 
@@ -1543,16 +1617,7 @@ function renderSettings(){
 // EDIT / ADD MODAL (punches)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let editCtx=null,addCtx=null;
-function openEditModal(username,logId){
-  const day=loadDay(username,adminDate);
-  const log=day.logs.find(l=>l.id===logId);
-  if(!log) return;
-  editCtx={username,logId};
-  document.getElementById('modalTitle').textContent=`打刻を編集 — ${username}`;
-  document.getElementById('editType').value=log.type;
-  document.getElementById('editTime').value=log.timeStr.slice(0,5);
-  document.getElementById('editModal').classList.add('open');
-}
+
 function saveLog(){
   if(!editCtx) return;
   const {username, logId} = editCtx;
@@ -1566,6 +1631,19 @@ function saveLog(){
   const dt=new Date(adminDate); dt.setHours(h,m,0,0); log.ts=dt.toISOString();
   recomputeState(day); saveDay(username,adminDate,day);
   closeModal('editModal'); renderDaily(); showToast('打刻を更新しました');
+}
+
+// 編集モーダルに「翌日退勤として分割記録」ボタンを表示するかチェック
+// → editModalのアクションに「日付跨ぎ分割」ボタンを動的追加
+function openEditModal(username,logId){
+  const day=loadDay(username,adminDate);
+  const log=day.logs.find(l=>l.id===logId);
+  if(!log) return;
+  editCtx={username,logId};
+  document.getElementById('modalTitle').textContent=`打刻を編集 — ${adminDate}`;
+  document.getElementById('editType').value=log.type;
+  document.getElementById('editTime').value=log.timeStr.slice(0,5);
+  document.getElementById('editModal').classList.add('open');
 }
 function showDeleteConfirm(){
   document.getElementById('editFormArea').style.display='none';
@@ -1589,12 +1667,88 @@ function openAddModal(username){
   addCtx={username};
   document.getElementById('addTime').value=new Date().toTimeString().slice(0,5);
   document.getElementById('addType').value='in';
+  document.getElementById('isCrossDay').checked=false;
+  document.getElementById('crossDayOption').style.display='none';
+  document.getElementById('crossDayDetail').style.display='none';
+  document.getElementById('addModalTitle').textContent=`打刻を追加 — ${adminDate}`;
   document.getElementById('addModal').classList.add('open');
 }
+function onAddTypeChange(){
+  const type=document.getElementById('addType').value;
+  const opt=document.getElementById('crossDayOption');
+  opt.style.display=(type==='out')?'block':'none';
+  if(type!=='out'){
+    document.getElementById('isCrossDay').checked=false;
+    document.getElementById('crossDayDetail').style.display='none';
+  }
+}
+function onCrossDayChange(){
+  const checked=document.getElementById('isCrossDay').checked;
+  document.getElementById('crossDayDetail').style.display=checked?'block':'none';
+  if(checked) updateCrossDayPreview();
+}
+function updateCrossDayPreview(){
+  const t=document.getElementById('addTime').value||'00:30';
+  // adminDate の翌日を計算
+  const nextDate=getNextDate(adminDate);
+  document.getElementById('crossDayPreview').innerHTML=
+    `① ${adminDate} 23:59:59 退勤（自動）<br>`+
+    `② ${nextDate} 00:00:00 出勤（自動）<br>`+
+    `③ ${nextDate} ${t}:00 退勤`;
+}
+function getNextDate(dateStr){
+  const d=new Date(dateStr); d.setDate(d.getDate()+1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// 日付跨ぎ分割処理: 前日に23:59退勤 + 翌日に00:00出勤・指定時刻退勤
+function applyMidnightSplit(username, prevDate, nextDate, outTimeStr){
+  const [h,m]=outTimeStr.split(':').map(Number);
+
+  // 前日: 休憩中なら休憩終了→退勤
+  const prevDay=loadDay(username,prevDate);
+  if(prevDay.state==='break'){
+    const endBreakTs=new Date(prevDate+'T23:59:58').toISOString();
+    prevDay.logs.push({id:uid(),type:'return',timeStr:'23:59:58',ts:endBreakTs});
+    if(prevDay.breakStart){
+      prevDay.totalBreak+=new Date(endBreakTs)-new Date(prevDay.breakStart);
+      prevDay.breakStart=null;
+    }
+  }
+  const autoOutTs=new Date(prevDate+'T23:59:59').toISOString();
+  prevDay.logs.push({id:uid(),type:'out',timeStr:'23:59:59',ts:autoOutTs});
+  recomputeState(prevDay);
+  saveDay(username,prevDate,prevDay);
+
+  // 翌日: 00:00出勤 + 指定時刻退勤
+  const nextDay=loadDay(username,nextDate);
+  const autoInTs=new Date(nextDate+'T00:00:00').toISOString();
+  nextDay.logs.push({id:uid(),type:'in',timeStr:'00:00:00',ts:autoInTs});
+  const outDt=new Date(nextDate); outDt.setHours(h,m,0,0);
+  nextDay.logs.push({id:uid(),type:'out',timeStr:outTimeStr+':00',ts:outDt.toISOString()});
+  recomputeState(nextDay);
+  saveDay(username,nextDate,nextDay);
+}
+
 function confirmAddLog(){
   if(!addCtx) return;
   const type=document.getElementById('addType').value;
   const t=document.getElementById('addTime').value;
+  const isCrossDay=document.getElementById('isCrossDay').checked;
+
+  if(type==='out' && isCrossDay){
+    // 日付跨ぎモード: 分割処理
+    const nextDate=getNextDate(adminDate);
+    applyMidnightSplit(addCtx.username, adminDate, nextDate, t);
+    closeModal('addModal');
+    // 表示は翌日に切り替えて確認できるように
+    adminDate=nextDate;
+    document.getElementById('adminDatePicker').value=adminDate;
+    renderDaily();
+    showToast(`日付跨ぎを分割記録しました（${adminDate}に表示切替）`);
+    return;
+  }
+
   const [h,m]=t.split(':').map(Number);
   const dt=new Date(adminDate); dt.setHours(h,m,0,0);
   const day=loadDay(addCtx.username,adminDate);
