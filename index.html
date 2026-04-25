@@ -1,0 +1,2354 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Recorder — powered by Magis corp.</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:#e0ddd4;--border2:#ccc9be;
+  --text:#1a1916;--text2:#6b6860;--text3:#9e9b93;
+  --green:#2d5a27;--green-l:#e8f0e6;
+  --blue:#1a3a8f;--blue-l:#e6ebf5;
+  --red:#8b2020;--red-l:#f5e6e6;
+  --amber:#7a5500;--amber-l:#f5eedb;
+  --purple:#5b2d8f;--purple-l:#f0ebf8;
+  --mono:'JetBrains Mono',monospace;--sans:'Noto Sans JP',sans-serif;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 4px 12px rgba(0,0,0,.06);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.06);
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;}
+.page{display:none;}.page.active{display:block;}
+
+/* ── LOGIN ── */
+#loginPage{min-height:100vh;display:none;align-items:center;justify-content:center;
+  background:var(--bg);
+  background-image:repeating-linear-gradient(0deg,transparent,transparent 47px,var(--border) 48px),
+  repeating-linear-gradient(90deg,transparent,transparent 47px,var(--border) 48px);}
+#loginPage.active{display:flex;}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:48px 40px;width:100%;max-width:400px;box-shadow:var(--shadow);}
+.login-logo{text-align:center;margin-bottom:32px;}
+.login-logo .brand{font-size:22px;font-weight:700;color:var(--green);letter-spacing:3px;text-transform:uppercase;}
+.login-logo .sub{font-size:11px;color:var(--text3);letter-spacing:2px;margin-top:4px;}
+.field{margin-bottom:16px;}
+.field label{display:block;font-size:11px;font-weight:500;letter-spacing:1.5px;color:var(--text2);text-transform:uppercase;margin-bottom:6px;}
+.field input,.field select,.field textarea{
+  width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;font-family:var(--sans);font-size:14px;color:var(--text);outline:none;transition:border-color .2s;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--green);}
+.field textarea{resize:vertical;min-height:72px;}
+.btn-login{width:100%;padding:14px;background:var(--green);color:#fff;border:none;border-radius:8px;
+  font-family:var(--sans);font-size:14px;font-weight:600;letter-spacing:2px;cursor:pointer;margin-top:8px;transition:all .2s;}
+.btn-login:hover{background:#234820;}.btn-login:active{transform:scale(.98);}
+.login-err{color:var(--red);font-size:12px;text-align:center;margin-top:12px;min-height:18px;}
+
+/* ── LAYOUT ── */
+.app-shell{min-height:100vh;display:flex;flex-direction:column;}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;
+  display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.topbar-brand{font-size:14px;font-weight:700;letter-spacing:3px;color:var(--green);text-transform:uppercase;}
+.topbar-right{display:flex;align-items:center;gap:16px;}
+.topbar-user{font-size:13px;color:var(--text2);}
+.topbar-user strong{color:var(--text);}
+.btn-logout{font-size:12px;padding:6px 14px;background:none;border:1px solid var(--border2);border-radius:6px;
+  color:var(--text2);cursor:pointer;font-family:var(--sans);transition:all .2s;}
+.btn-logout:hover{border-color:var(--red);color:var(--red);}
+
+/* TABS */
+.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);padding:0 24px;}
+.tab-btn{padding:14px 20px;background:none;border:none;border-bottom:2px solid transparent;
+  font-family:var(--sans);font-size:13px;font-weight:500;color:var(--text3);cursor:pointer;transition:all .2s;margin-bottom:-1px;}
+.tab-btn:hover{color:var(--text2);}
+.tab-btn.active{color:var(--green);border-bottom-color:var(--green);font-weight:700;}
+.tab-content{display:none;}.tab-content.active{display:block;}
+
+.main-content{flex:1;padding:28px 24px;max-width:860px;margin:0 auto;width:100%;}
+.main-content.wide{max-width:1100px;}
+
+/* ── CLOCK CARD ── */
+.clock-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:36px;text-align:center;margin-bottom:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+.clock-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--green),#5a9e52,var(--green));}
+.date-txt{font-size:12px;letter-spacing:2px;color:var(--text3);margin-bottom:6px;}
+.time-big{font-family:var(--mono);font-size:clamp(48px,12vw,80px);color:var(--text);line-height:1;letter-spacing:2px;}
+.time-sec{font-family:var(--mono);font-size:22px;color:var(--green);letter-spacing:1px;}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;
+  font-size:12px;font-weight:600;letter-spacing:1px;margin-top:16px;}
+.badge.out{background:var(--surface2);color:var(--text3);}
+.badge.in{background:var(--green-l);color:var(--green);}
+.badge.break{background:var(--amber-l);color:var(--amber);}
+.badge.done{background:var(--surface2);color:var(--text2);}
+
+/* ── PUNCH BUTTONS ── */
+.btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
+.punch-btn{padding:20px 16px;border-radius:12px;border:1.5px solid;background:var(--surface);
+  cursor:pointer;font-family:var(--sans);display:flex;flex-direction:column;align-items:center;
+  gap:5px;transition:all .18s;box-shadow:var(--shadow-sm);}
+.punch-btn:disabled{opacity:.3;cursor:not-allowed;}
+.punch-btn:not(:disabled):hover{transform:translateY(-2px);box-shadow:var(--shadow);}
+.punch-btn:not(:disabled):active{transform:scale(.97);}
+.punch-btn .p-icon{font-size:18px;}.punch-btn .p-label{font-size:13px;font-weight:700;letter-spacing:2px;}
+.punch-btn .p-sub{font-size:10px;color:var(--text3);}
+.punch-btn.in-btn{border-color:var(--green);color:var(--green);}
+.punch-btn.in-btn:not(:disabled):hover{background:var(--green-l);}
+.punch-btn.out-btn{border-color:var(--red);color:var(--red);}
+.punch-btn.out-btn:not(:disabled):hover{background:var(--red-l);}
+.punch-btn.brk-btn{border-color:var(--amber);color:var(--amber);}
+.punch-btn.brk-btn:not(:disabled):hover{background:var(--amber-l);}
+.punch-btn.ret-btn{border-color:var(--blue);color:var(--blue);}
+.punch-btn.ret-btn:not(:disabled):hover{background:var(--blue-l);}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow-sm);}
+.card-title{font-size:10px;font-weight:600;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:14px;}
+.sum-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+.sum-item label{font-size:11px;color:var(--text3);display:block;margin-bottom:4px;}
+.sum-val{font-family:var(--mono);font-size:20px;color:var(--text);}
+.sum-val.green{color:var(--green);}.sum-val.red{color:var(--red);}.sum-val.amber{color:var(--amber);}
+.log-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.log-list{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.log-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;
+  background:var(--surface2);font-size:13px;border-left:3px solid;animation:slideIn .25s ease;}
+@keyframes slideIn{from{opacity:0;transform:translateX(-6px);}to{opacity:1;transform:translateX(0);}}
+.log-item.li-in{border-color:var(--green);}.log-item.li-out{border-color:var(--red);}
+.log-item.li-break{border-color:var(--amber);}.log-item.li-ret{border-color:var(--blue);}
+.log-type{font-weight:600;font-size:12px;min-width:60px;}
+.li-in .log-type{color:var(--green);}.li-out .log-type{color:var(--red);}
+.li-break .log-type{color:var(--amber);}.li-ret .log-type{color:var(--blue);}
+.log-time{font-family:var(--mono);font-size:12px;color:var(--text3);margin-left:auto;}
+.empty-note{text-align:center;padding:24px;color:var(--text3);font-size:13px;}
+
+/* ── BUTTONS ── */
+.btn-primary{padding:8px 16px;background:var(--green);color:#fff;border:none;border-radius:8px;
+  font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:background .2s;}
+.btn-primary:hover{background:#234820;}
+.btn-danger{padding:8px 16px;background:var(--red);color:#fff;border:none;border-radius:8px;
+  font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;}
+.btn-ghost{padding:8px 16px;background:none;border:1px solid var(--border2);border-radius:8px;
+  font-family:var(--sans);font-size:13px;color:var(--text2);cursor:pointer;}
+.btn-ghost:hover{border-color:var(--text);color:var(--text);}
+.btn-sm{font-size:11px;padding:4px 10px;background:none;border:1px solid var(--border2);
+  border-radius:6px;color:var(--text2);cursor:pointer;font-family:var(--sans);transition:all .2s;}
+.btn-sm:hover{border-color:var(--red);color:var(--red);}
+.btn-add{font-size:12px;padding:5px 12px;background:var(--green-l);border:1px solid var(--green);
+  border-radius:6px;color:var(--green);font-family:var(--sans);cursor:pointer;font-weight:600;transition:all .2s;}
+.btn-add:hover{background:var(--green);color:#fff;}
+
+/* ── ADMIN LAYOUT ── */
+.admin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+.admin-title{font-size:18px;font-weight:700;}.admin-sub{font-size:12px;color:var(--text3);margin-top:2px;}
+.date-nav{display:flex;align-items:center;gap:8px;}
+.date-nav input[type="date"],.date-nav select{
+  padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);
+  font-family:var(--sans);font-size:13px;color:var(--text);outline:none;}
+
+/* user card */
+.user-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  margin-bottom:16px;overflow:hidden;box-shadow:var(--shadow-sm);}
+.user-card-header{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface2);}
+.user-name-row{display:flex;align-items:center;gap:10px;}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--green);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;}
+.u-name{font-weight:700;font-size:14px;}.u-state{font-size:11px;margin-top:2px;}
+.user-stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:0;}
+.user-stat{padding:12px 16px;border-right:1px solid var(--border);}
+.user-stat:last-child{border-right:none;}
+.user-stat label{font-size:10px;color:var(--text3);letter-spacing:1px;display:block;margin-bottom:4px;}
+.user-stat .sv{font-family:var(--mono);font-size:15px;}
+.sv.green{color:var(--green);}.sv.red{color:var(--red);}.sv.amber{color:var(--amber);}
+.toggle-log{width:100%;padding:10px 18px;background:none;border:none;border-top:1px solid var(--border);
+  cursor:pointer;font-family:var(--sans);font-size:12px;color:var(--text2);text-align:left;
+  letter-spacing:1px;transition:background .15s;}
+.toggle-log:hover{background:var(--surface2);}
+.admin-log-wrap{padding:0 18px 14px;}
+.admin-log-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;}
+.admin-log-table th{text-align:left;font-size:10px;letter-spacing:1.5px;color:var(--text3);
+  text-transform:uppercase;padding:6px 10px;border-bottom:1px solid var(--border);}
+.admin-log-table td{padding:8px 10px;border-bottom:1px solid var(--border);}
+.admin-log-table tr:last-child td{border-bottom:none;}
+.admin-log-table tr:hover td{background:var(--surface2);}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;}
+.tag.in{background:var(--green-l);color:var(--green);}.tag.out{background:var(--red-l);color:var(--red);}
+.tag.break{background:var(--amber-l);color:var(--amber);}.tag.ret{background:var(--blue-l);color:var(--blue);}
+
+/* ── SALARY TABLE ── */
+.salary-section{margin-top:8px;}
+.salary-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+.salary-table th{background:var(--surface2);font-size:10px;letter-spacing:1.5px;color:var(--text3);
+  text-transform:uppercase;padding:8px 12px;border:1px solid var(--border);text-align:left;}
+.salary-table td{padding:8px 12px;border:1px solid var(--border);}
+.salary-table .mono{font-family:var(--mono);}
+.salary-table .right{text-align:right;}
+.salary-table tfoot td{font-weight:700;background:var(--surface2);}
+.salary-box{background:var(--green-l);border:1px solid var(--green);border-radius:10px;padding:16px 20px;margin-top:12px;}
+.salary-box .label{font-size:11px;color:var(--green);font-weight:600;letter-spacing:1px;margin-bottom:4px;}
+.salary-box .amount{font-family:var(--mono);font-size:28px;color:var(--green);font-weight:600;}
+.salary-box .note{font-size:11px;color:var(--text2);margin-top:4px;}
+.salary-type-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;}
+.salary-type-row label{font-size:12px;color:var(--text2);}
+.salary-type-row select,.salary-type-row input{
+  padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-family:var(--sans);
+  font-size:13px;background:var(--surface);outline:none;}
+
+/* ── MONTHLY VIEW ── */
+.month-nav{display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+.month-nav input[type="month"]{padding:7px 10px;border:1px solid var(--border);border-radius:8px;
+  background:var(--surface);font-family:var(--sans);font-size:13px;color:var(--text);outline:none;}
+.month-user-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  margin-bottom:20px;overflow:hidden;box-shadow:var(--shadow-sm);}
+.month-user-header{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 20px;background:var(--surface2);border-bottom:1px solid var(--border);}
+.month-day-table{width:100%;border-collapse:collapse;font-size:12px;}
+.month-day-table th{font-size:10px;letter-spacing:1px;color:var(--text3);text-transform:uppercase;
+  padding:6px 12px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);
+  text-align:left;background:var(--surface2);}
+.month-day-table td{padding:7px 12px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.month-day-table td:last-child,.month-day-table th:last-child{border-right:none;}
+.month-day-table tr.holiday td{background:#fff8f8;color:var(--red);}
+.month-day-table tr.sat td{background:#f8f8ff;}
+.month-day-table .mono{font-family:var(--mono);}
+.month-day-table tfoot td{font-weight:700;background:var(--surface2);border-top:2px solid var(--border2);}
+.month-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--border);}
+.month-summary-item{padding:12px 16px;border-right:1px solid var(--border);}
+.month-summary-item:last-child{border-right:none;}
+.month-summary-item label{font-size:10px;color:var(--text3);display:block;margin-bottom:4px;}
+.month-summary-item .sv{font-family:var(--mono);font-size:16px;}
+
+/* salary history */
+.history-table{width:100%;border-collapse:collapse;font-size:13px;}
+.history-table th{background:var(--surface2);font-size:10px;letter-spacing:1.5px;color:var(--text3);
+  text-transform:uppercase;padding:8px 14px;border:1px solid var(--border);text-align:left;}
+.history-table td{padding:9px 14px;border:1px solid var(--border);}
+.history-table .mono{font-family:var(--mono);}
+.history-table .right{text-align:right;}
+.history-table tr:hover td{background:var(--surface2);}
+
+/* ── EXPENSE ── */
+.expense-form{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow-sm);}
+.expense-list{display:flex;flex-direction:column;gap:10px;}
+.expense-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;
+  border-radius:8px;background:var(--surface2);border:1px solid var(--border);}
+.expense-item .ei-meta{flex:1;}
+.expense-item .ei-title{font-weight:600;font-size:13px;}
+.expense-item .ei-detail{font-size:12px;color:var(--text2);margin-top:2px;}
+.expense-item .ei-amount{font-family:var(--mono);font-size:15px;font-weight:600;white-space:nowrap;}
+.expense-status{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;}
+.expense-status.pending{background:var(--amber-l);color:var(--amber);}
+.expense-status.approved{background:var(--green-l);color:var(--green);}
+.expense-status.rejected{background:var(--red-l);color:var(--red);}
+
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;
+  align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border-radius:14px;padding:28px;width:100%;max-width:480px;
+  box-shadow:0 20px 60px rgba(0,0,0,.2);animation:popIn .2s ease;max-height:90vh;overflow-y:auto;}
+@keyframes popIn{from{opacity:0;transform:scale(.94);}to{opacity:1;transform:scale(1);}}
+.modal h3{font-size:16px;margin-bottom:18px;}
+.modal-actions{display:flex;gap:10px;margin-top:18px;justify-content:flex-end;}
+
+/* ── PENDING BADGE ── */
+.tab-btn{position:relative;}
+.pending-badge{
+  position:absolute;top:6px;right:4px;
+  background:var(--red);color:#fff;
+  font-size:10px;font-weight:700;line-height:1;
+  min-width:16px;height:16px;
+  border-radius:8px;
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:0 4px;
+  pointer-events:none;
+  animation:badgePop .3s ease;
+}
+@keyframes badgePop{from{transform:scale(0);}to{transform:scale(1);}}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(16px);
+  background:var(--text);color:#fff;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:500;
+  opacity:0;transition:all .25s;pointer-events:none;z-index:999;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ── MISC ── */
+.section-label{font-size:11px;font-weight:600;letter-spacing:2px;color:var(--text3);
+  text-transform:uppercase;margin-bottom:12px;}
+.info-row{display:flex;justify-content:space-between;align-items:center;
+  padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.info-row:last-child{border-bottom:none;}
+.info-row .key{color:var(--text2);}
+.info-row .val{font-family:var(--mono);font-weight:600;}
+.chip{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;}
+.chip.green{background:var(--green-l);color:var(--green);}
+.chip.blue{background:var(--blue-l);color:var(--blue);}
+.chip.red{background:var(--red-l);color:var(--red);}
+.chip.amber{background:var(--amber-l);color:var(--amber);}
+.chip.purple{background:var(--purple-l);color:var(--purple);}
+hr.divider{border:none;border-top:1px solid var(--border);margin:16px 0;}
+</style>
+</head>
+<body>
+
+<!-- ══ SUPABASE CONFIG ══ -->
+<div id="configPage" class="page">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:var(--bg);background-image:repeating-linear-gradient(0deg,transparent,transparent 47px,var(--border) 48px),
+    repeating-linear-gradient(90deg,transparent,transparent 47px,var(--border) 48px);">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;
+      padding:48px 40px;width:100%;max-width:500px;box-shadow:var(--shadow);">
+      <div style="text-align:center;margin-bottom:28px;">
+        <div style="font-size:20px;font-weight:700;color:var(--green);letter-spacing:3px;text-transform:uppercase;">Time Recorder</div>
+        <div style="font-size:11px;color:var(--text3);letter-spacing:2px;margin-top:4px;">powered by Magis corp.</div>
+      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;">Supabase 接続設定</div>
+      <div class="field">
+        <label>Project URL</label>
+        <input type="text" id="cfgUrl" placeholder="https://xxxxxxxxxxxx.supabase.co"
+          style="font-family:var(--mono);font-size:12px;">
+      </div>
+      <div class="field">
+        <label>Anon Key（public）</label>
+        <input type="text" id="cfgKey" placeholder="eyJhbGciOi..."
+          style="font-family:var(--mono);font-size:12px;">
+      </div>
+      <div style="font-size:12px;color:var(--text3);background:var(--surface2);border-radius:8px;
+        padding:10px 12px;margin-bottom:16px;line-height:1.7;">
+        Supabase ダッシュボード → Settings → API から<br>
+        <strong>Project URL</strong> と <strong>anon public key</strong> をコピーしてください。<br>
+        設定値はブラウザに保存されます（次回自動接続）。
+      </div>
+      <div id="cfgErr" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;"></div>
+      <button class="btn-login" onclick="initSupabase()">接続してログイン画面へ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LOGIN ══ -->
+<div id="loginPage" class="page">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="brand">Time Recorder</div>
+      <div class="sub">powered by Magis corp.</div>
+    </div>
+    <div class="field"><label>ユーザー名</label>
+      <input type="text" id="loginUser" placeholder="Username" autocomplete="username"></div>
+    <div class="field"><label>パスワード</label>
+      <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password"></div>
+    <button class="btn-login" onclick="doLogin()">ログイン</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ══ USER PAGE ══ -->
+<div id="userPage" class="page">
+  <div class="app-shell">
+    <div class="topbar">
+      <div class="topbar-brand" style="letter-spacing:1px;font-size:13px;">Time Recorder <span style="font-weight:300;color:var(--text3);font-size:11px;">powered by Magis corp.</span></div>
+      <div class="topbar-right">
+        <div class="topbar-user">ようこそ、<strong id="topUser"></strong></div>
+        <button class="btn-logout" onclick="doLogout()">ログアウト</button>
+      </div>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchUserTab('clock')">打刻</button>
+      <button class="tab-btn" onclick="switchUserTab('salary')">給与明細</button>
+      <button class="tab-btn" onclick="switchUserTab('expense')">経費・交通費申請</button>
+      <button class="tab-btn" id="userTabBtnMailbox" onclick="switchUserTab('mailbox')" style="position:relative;">メール</button>
+    </div>
+    <div class="main-content">
+      <!-- TAB: CLOCK -->
+      <div id="userTabClock" class="tab-content active">
+        <div class="clock-card">
+          <div class="date-txt" id="uDate"></div>
+          <div class="time-big" id="uTimeHM"></div>
+          <div class="time-sec" id="uTimeSec"></div>
+          <span class="badge out" id="uBadge">未出勤</span>
+
+        </div>
+        <div class="btn-grid">
+          <button class="punch-btn in-btn"  id="pIn"  onclick="punch('in')">
+            <span class="p-icon">▶</span><span class="p-label">出 勤</span><span class="p-sub">Clock In</span></button>
+          <button class="punch-btn out-btn" id="pOut" onclick="punch('out')" disabled>
+            <span class="p-icon">■</span><span class="p-label">退 勤</span><span class="p-sub">Clock Out</span></button>
+          <button class="punch-btn brk-btn" id="pBrk" onclick="punch('break')" disabled>
+            <span class="p-icon">⏸</span><span class="p-label">休 憩</span><span class="p-sub">Break Start</span></button>
+          <button class="punch-btn ret-btn" id="pRet" onclick="punch('return')" disabled>
+            <span class="p-icon">↩</span><span class="p-label">再 開</span><span class="p-sub">Return</span></button>
+        </div>
+        <div class="card">
+          <div class="card-title">本日のサマリー</div>
+          <div class="sum-grid">
+            <div class="sum-item"><label>出勤時刻</label><div class="sum-val green" id="sIn">--:--</div></div>
+            <div class="sum-item"><label>退勤時刻</label><div class="sum-val red"   id="sOut">--:--</div></div>
+            <div class="sum-item"><label>実働時間</label><div class="sum-val amber" id="sWork">0:00</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="log-header">
+            <div class="card-title" style="margin-bottom:0">打刻ログ（本日）</div>
+            <button class="btn-sm" onclick="userClearLog()">リセット</button>
+          </div>
+          <ul class="log-list" id="uLogList"></ul>
+        </div>
+      </div><!-- /TAB CLOCK -->
+
+      <!-- TAB: SALARY (user view, read-only) -->
+      <div id="userTabSalary" class="tab-content">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+          <div style="font-size:18px;font-weight:700;">給与明細</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="month" id="userMonthPicker" onchange="renderUserSalary()" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-family:var(--sans);font-size:13px;color:var(--text);outline:none;">
+            <button class="btn-primary" onclick="setUserMonthToday()">今月</button>
+          </div>
+        </div>
+        <div id="userSalaryContent"></div>
+      </div><!-- /TAB SALARY -->
+
+      <!-- TAB: MAILBOX -->
+      <div id="userTabMailbox" class="tab-content">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <div style="font-size:18px;font-weight:700;">メールボックス</div>
+          <button class="btn-sm" onclick="markAllRead()">すべて既読</button>
+        </div>
+        <div id="userMailList"></div>
+      </div><!-- /TAB MAILBOX -->
+
+      <!-- TAB: EXPENSE -->
+      <div id="userTabExpense" class="tab-content">
+        <div class="expense-form card">
+          <div class="card-title">経費・交通費を申請する</div>
+          <div class="field"><label>申請日</label><input type="date" id="expDate"></div>
+          <div class="field"><label>種別</label>
+            <select id="expType">
+              <option value="transport">交通費</option>
+              <option value="expense">経費</option>
+            </select></div>
+          <div class="field"><label>件名・内容</label><input type="text" id="expTitle" placeholder="例：渋谷→新宿 電車代"></div>
+          <div class="field"><label>金額（円）</label><input type="number" id="expAmount" placeholder="1500" min="1"></div>
+          <div class="field"><label>備考（任意）</label><textarea id="expNote" placeholder="詳細・領収書番号など"></textarea></div>
+          <button class="btn-primary" onclick="submitExpense()">申請する</button>
+        </div>
+        <div class="card">
+          <div class="card-title">申請一覧</div>
+          <div id="userExpenseList"><div class="empty-note">申請記録がありません</div></div>
+        </div>
+      </div><!-- /TAB EXPENSE -->
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADMIN PAGE ══ -->
+<div id="adminPage" class="page">
+  <div class="app-shell">
+    <div class="topbar">
+      <div class="topbar-brand" style="letter-spacing:1px;font-size:13px;">Time Recorder <span style="font-weight:300;color:var(--text3);font-size:11px;">powered by Magis corp.</span></div>
+      <div class="topbar-right">
+        <div class="topbar-user"><strong>Magis</strong> 管理者</div>
+        <button class="btn-logout" onclick="doLogout()">ログアウト</button>
+      </div>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchAdminTab('daily')">日次勤怠</button>
+      <button class="tab-btn" onclick="switchAdminTab('monthly')">月次・給与</button>
+      <button class="tab-btn" id="tabBtnExpenses" onclick="switchAdminTab('expenses')">経費申請</button>
+      <button class="tab-btn" onclick="switchAdminTab('settings')">設定</button>
+    </div>
+    <div class="main-content wide">
+
+      <!-- TAB: DAILY -->
+      <div id="adminTabDaily" class="tab-content active">
+        <div class="admin-header">
+          <div><div class="admin-title">日次勤怠</div><div class="admin-sub" id="adminDateLabel"></div></div>
+          <div class="date-nav">
+            <input type="date" id="adminDatePicker" onchange="renderDaily()">
+            <button class="btn-primary" onclick="setAdminDateToday()">今日</button>
+          </div>
+        </div>
+        <div id="adminUserCards"></div>
+      </div>
+
+      <!-- TAB: MONTHLY -->
+      <div id="adminTabMonthly" class="tab-content">
+        <div class="admin-header">
+          <div><div class="admin-title">月次・給与計算</div></div>
+          <div class="month-nav">
+            <input type="month" id="monthPicker" onchange="renderMonthly()">
+            <button class="btn-primary" onclick="setMonthToday()">今月</button>
+          </div>
+        </div>
+        <div id="monthlyContent"></div>
+      </div>
+
+      <!-- TAB: EXPENSES -->
+      <div id="adminTabExpenses" class="tab-content">
+        <div class="admin-header">
+          <div><div class="admin-title">経費・交通費申請一覧</div></div>
+          <div class="date-nav">
+            <select id="expUserFilter" onchange="renderAdminExpenses()">
+              <option value="">全ユーザー</option>
+            </select>
+            <select id="expStatusFilter" onchange="renderAdminExpenses()">
+              <option value="">全ステータス</option>
+              <option value="pending">承認待ち</option>
+              <option value="approved">承認済み</option>
+              <option value="rejected">却下</option>
+            </select>
+          </div>
+        </div>
+        <div id="adminExpenseList"></div>
+      </div>
+
+      <!-- TAB: SETTINGS -->
+      <div id="adminTabSettings" class="tab-content">
+        <div class="admin-header"><div class="admin-title">ユーザー設定</div></div>
+        <div id="settingsContent"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODALS ══ -->
+<!-- Edit punch -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h3 id="modalTitle">打刻を編集</h3>
+    <div id="editFormArea">
+      <div class="field"><label>種別</label>
+        <select id="editType">
+          <option value="in">出勤</option><option value="out">退勤</option>
+          <option value="break">休憩開始</option><option value="return">休憩終了</option>
+        </select></div>
+      <div class="field"><label>時刻</label><input type="time" id="editTime" step="1"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeModal('editModal')">キャンセル</button>
+        <button class="btn-danger" onclick="showDeleteConfirm()">削除</button>
+        <button class="btn-primary" onclick="saveLog()">保存</button>
+      </div>
+    </div>
+    <div id="deleteConfirmArea" style="display:none;">
+      <div style="background:var(--red-l);border:1px solid var(--red);border-radius:8px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-weight:700;color:var(--red);margin-bottom:6px;">この打刻を削除しますか？</div>
+        <div style="font-size:13px;color:var(--text2);">削除すると元に戻せません。</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="hideDeleteConfirm()">戻る</button>
+        <button class="btn-danger" onclick="executeDeleteLog()">削除する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add punch -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h3 id="addModalTitle">打刻を追加</h3>
+    <div class="field"><label>種別</label>
+      <select id="addType" onchange="onAddTypeChange()">
+        <option value="in">出勤</option><option value="out">退勤</option>
+        <option value="break">休憩開始</option><option value="return">休憩終了</option>
+      </select></div>
+    <div class="field"><label>時刻</label><input type="time" id="addTime" step="1"></div>
+    <!-- 退勤選択時のみ表示: 日付跨ぎオプション -->
+    <div id="crossDayOption" style="display:none;background:var(--amber-l);border:1px solid var(--amber);border-radius:8px;padding:12px 14px;margin-bottom:4px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--amber);">
+        <input type="checkbox" id="isCrossDay" onchange="onCrossDayChange()" style="width:16px;height:16px;">
+        翌日の退勤（日付跨ぎ）
+      </label>
+      <div id="crossDayDetail" style="display:none;margin-top:10px;">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">
+          自動で以下の3件が記録されます：<br>
+          <span id="crossDayPreview" style="font-family:var(--mono);font-size:11px;"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('addModal')">キャンセル</button>
+      <button class="btn-primary" onclick="confirmAddLog()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Expense detail (admin) -->
+<div class="modal-overlay" id="expenseModal">
+  <div class="modal">
+    <h3>経費申請の詳細</h3>
+    <div id="expenseModalBody"></div>
+    <div class="modal-actions" id="expenseModalActions"></div>
+  </div>
+</div>
+
+<!-- ══ HOLIDAY MODAL ══ -->
+<div class="modal-overlay" id="holidayModal">
+  <div class="modal" style="max-width:360px;">
+    <h3 id="holidayModalTitle">祝日の設定</h3>
+    <div id="holidayModalBody"></div>
+    <div class="modal-actions" id="holidayModalActions"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="loadingOverlay" style="display:none;position:fixed;inset:0;background:rgba(245,244,240,0.88);
+  z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:14px;">
+  <div style="width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--green);
+    border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+  <div id="loadingMsg" style="font-size:13px;color:var(--text2);font-weight:500;">読み込み中...</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg);}}</style>
+
+<script>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SUPABASE 初期化・API層
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let sb = null;
+
+function loadingShow(msg='読み込み中...'){
+  const el=document.getElementById('loadingOverlay');
+  document.getElementById('loadingMsg').textContent=msg;
+  el.style.display='flex';
+}
+function loadingHide(){ document.getElementById('loadingOverlay').style.display='none'; }
+
+// Supabase URL・Key 直接埋め込み済み
+const SB_URL = 'https://mbuwdtwfmovqbagfkwhb.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1idXdkdHdmbW92cWJhZ2Zrd2hiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwODQwMDksImV4cCI6MjA5MjY2MDAwOX0.eALxyckyqe1k8vZEvGiY9xiMRw8Bm_fSBU6uW_Zn_kY';
+
+async function initSupabase(){
+  // 入力フォーム経由の場合（埋め込み済みなので通常は使わない）
+  const url=document.getElementById('cfgUrl')?.value.trim()||SB_URL;
+  const key=document.getElementById('cfgKey')?.value.trim()||SB_KEY;
+  const err=document.getElementById('cfgErr');
+  if(err) err.textContent='';
+  try {
+    sb=supabase.createClient(url,key);
+    const {error}=await sb.from('attendance_logs').select('id').limit(1);
+    if(error) throw error;
+    showPage('loginPage');
+  } catch(e){
+    if(err) err.textContent='接続失敗: '+(e.message||e);
+    sb=null;
+  }
+}
+
+window.addEventListener('DOMContentLoaded', async ()=>{
+  // 埋め込みURLで自動接続
+  try {
+    sb=supabase.createClient(SB_URL, SB_KEY);
+    const {error}=await sb.from('attendance_logs').select('id').limit(1);
+    if(!error){ showPage('loginPage'); return; }
+  } catch(e){}
+  sb=null;
+  showPage('configPage');
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SUPABASE データ層（非同期）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// ── attendance ──
+async function loadDayAsync(username,dateStr){
+  const {data,error}=await sb.from('attendance_logs')
+    .select('data').eq('username',username).eq('date',dateStr).maybeSingle();
+  if(error||!data) return defaultDay();
+  return data.data||defaultDay();
+}
+async function saveDayAsync(username,dateStr,dayData){
+  const {error}=await sb.from('attendance_logs').upsert(
+    {username,date:dateStr,data:dayData,updated_at:new Date().toISOString()},
+    {onConflict:'username,date'}
+  );
+  if(error) console.error('saveDayAsync error:',error);
+}
+async function getAllUsersDaysAsync(month){
+  const start=month+'-01'; const end=month+'-31';
+  const {data,error}=await sb.from('attendance_logs')
+    .select('username,date,data').gte('date',start).lte('date',end);
+  if(error||!data) return {};
+  const result={};
+  data.forEach(r=>{
+    if(!result[r.username]) result[r.username]={};
+    result[r.username][r.date]=r.data;
+  });
+  return result;
+}
+
+// ── settings ──
+async function loadUserSettingsAsync(username){
+  const {data,error}=await sb.from('user_settings')
+    .select('settings').eq('username',username).maybeSingle();
+  if(error||!data) return {wageHistory:[{from:'2000-01',wage:1800}],paymentType:'salary'};
+  const s=data.settings;
+  if(typeof s.hourlyWage==='number'&&!s.wageHistory){
+    s.wageHistory=[{from:'2000-01',wage:s.hourlyWage}]; delete s.hourlyWage;
+  }
+  if(!s.wageHistory) s.wageHistory=[{from:'2000-01',wage:1800}];
+  return s;
+}
+async function saveUserSettingsAsync(username,s){
+  await sb.from('user_settings').upsert(
+    {username,settings:s,updated_at:new Date().toISOString()},
+    {onConflict:'username'}
+  );
+}
+
+// ── expenses ──
+async function loadExpensesAsync(username){
+  const {data,error}=await sb.from('expenses')
+    .select('*').eq('username',username).order('submitted_at',{ascending:false});
+  if(error||!data) return [];
+  return data.map(r=>({
+    id:r.id,date:r.date,type:r.type,title:r.title,
+    amount:r.amount,note:r.note,status:r.status,submittedAt:r.submitted_at
+  }));
+}
+async function loadAllExpensesAsync(){
+  const {data,error}=await sb.from('expenses')
+    .select('*').order('submitted_at',{ascending:false});
+  if(error||!data) return [];
+  return data.map(r=>({
+    id:r.id,username:r.username,date:r.date,type:r.type,title:r.title,
+    amount:r.amount,note:r.note,status:r.status,submittedAt:r.submitted_at
+  }));
+}
+async function saveExpenseAsync(username,exp){
+  await sb.from('expenses').insert({
+    id:exp.id,username,date:exp.date,type:exp.type,title:exp.title,
+    amount:exp.amount,note:exp.note||'',status:exp.status||'pending',
+    submitted_at:exp.submittedAt||new Date().toISOString(),
+    updated_at:new Date().toISOString()
+  });
+}
+async function updateExpenseStatusAsync(expId,newStatus){
+  await sb.from('expenses').update({status:newStatus,updated_at:new Date().toISOString()}).eq('id',expId);
+}
+
+// ── bonuses ──
+async function loadBonusAsync(username,month){
+  const {data,error}=await sb.from('bonuses')
+    .select('amount').eq('username',username).eq('month',month).maybeSingle();
+  if(error||!data) return 0;
+  return data.amount||0;
+}
+async function saveBonusAsync(username,month,amount){
+  if(amount>0){
+    await sb.from('bonuses').upsert(
+      {username,month,amount,updated_at:new Date().toISOString()},
+      {onConflict:'username,month'}
+    );
+  } else {
+    await sb.from('bonuses').delete().eq('username',username).eq('month',month);
+  }
+}
+async function loadMonthBonusesAsync(month){
+  const {data,error}=await sb.from('bonuses').select('username,amount').eq('month',month);
+  if(error||!data) return {};
+  const result={};
+  data.forEach(r=>{ result[r.username]=r.amount; });
+  return result;
+}
+
+// ── holidays ──
+async function loadHolidaysAsync(){
+  const {data,error}=await sb.from('holidays').select('*');
+  if(error||!data) return [];
+  return data.map(r=>({date:r.date,name:r.name}));
+}
+async function saveHolidayAsync(date,name){
+  await sb.from('holidays').upsert({date,name},{onConflict:'date'});
+}
+async function removeHolidayAsync(date){
+  await sb.from('holidays').delete().eq('date',date);
+}
+
+// ── mailbox ──
+async function loadMailsAsync(username){
+  const {data,error}=await sb.from('mailbox')
+    .select('*').eq('username',username).order('sent_at',{ascending:false});
+  if(error||!data) return [];
+  return data.map(r=>({
+    id:r.id,subject:r.subject,body:r.body,type:r.type,
+    read:r.read,sentAt:r.sent_at
+  }));
+}
+async function sendMailAsync(id,username,subject,body,type){
+  await sb.from('mailbox').insert({
+    id,username,subject,body,type:type||'info',
+    read:false,sent_at:new Date().toISOString()
+  });
+}
+async function markMailsReadAsync(username){
+  await sb.from('mailbox').update({read:true}).eq('username',username).eq('read',false);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// キャッシュ層（GASの遅延を吸収）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const _cache = {
+  days:{}, settings:{}, expenses:{}, bonuses:{}, holidays:[], mails:{}
+};
+
+// ── 同期ラッパー（既存コードをそのまま維持）──
+function defaultDay(){ return {state:"out",inTime:null,outTime:null,breakStart:null,totalBreak:0,logs:[]}; }
+function loadDay(username,dateStr){
+  return _cache.days[`${username}_${dateStr}`] || defaultDay();
+}
+function saveDay(username,dateStr,data){
+  _cache.days[`${username}_${dateStr}`]=data;
+  saveDayAsync(username,dateStr,data).catch(e=>console.error('saveDay',e));
+}
+function loadUserSettings(username){
+  return _cache.settings[username]||{wageHistory:[{from:'2000-01',wage:1800}],paymentType:'salary'};
+}
+function saveUserSettings(username,s){
+  _cache.settings[username]=s;
+  saveUserSettingsAsync(username,s).catch(e=>console.error('saveSettings',e));
+}
+function loadExpenses(username){ return _cache.expenses[username]||[]; }
+function saveExpenses(username,list){
+  _cache.expenses[username]=list;
+  // 差分同期: 最後に追加されたものだけ送る（削除はupdateExpenseStatusで管理）
+  // ここでは全件再送（シンプル実装）
+  // 大量になる場合はsaveExpenseのみ使用を推奨
+}
+function loadBonus(username,month){ return _cache.bonuses[`${username}_${month}`]||0; }
+function saveBonus(username,month,val){
+  const amt=parseInt(val)||0;
+  _cache.bonuses[`${username}_${month}`]=amt;
+  saveBonusAsync(username,month,amt).catch(e=>console.error('saveBonus',e));
+  renderMonthly(); showToast(amt>0?`賞与 ¥${amt.toLocaleString()} を設定しました`:'賞与を削除しました');
+}
+function loadHolidays(){ return _cache.holidays; }
+function saveHolidays(list){ _cache.holidays=list; }
+function loadMails(username){ return _cache.mails[username]||[]; }
+function saveMails(username,list){ _cache.mails[username]=list; }
+
+// ── 経費: 新規追加はGASに直接送る ──
+const _origSubmitExpense = null; // 後でオーバーライド
+
+// ── 祝日: 非同期で直接GASに送る ──
+async function confirmHoliday(dateStr){
+  const name=document.getElementById('holidayNameInput').value.trim();
+  if(!name){ showToast('祝日名を入力してください'); return; }
+  _cache.holidays=_cache.holidays.filter(h=>h.date!==dateStr);
+  _cache.holidays.push({date:dateStr,name});
+  await saveHolidayAsync(dateStr,name);
+  closeModal('holidayModal'); renderMonthly();
+  showToast(`${name} を設定しました`);
+}
+async function removeHoliday(dateStr){
+  _cache.holidays=_cache.holidays.filter(h=>h.date!==dateStr);
+  await removeHolidayAsync(dateStr);
+  closeModal('holidayModal'); renderMonthly();
+  showToast('祝日設定を解除しました');
+}
+
+// ── メール送信: 非同期 ──
+async function sendMail(username,subject,body,type='info'){
+  const mailId=uid();
+  const mail={id:mailId,subject,body,type,sentAt:new Date().toISOString(),read:false};
+  if(!_cache.mails[username]) _cache.mails[username]=[];
+  _cache.mails[username].unshift(mail);
+  try {
+    await sendMailAsync(mailId,username,subject,body,type);
+  } catch(err){ console.error('sendMail error:',err); }
+}
+
+// ── 既読: 非同期 ──
+async function markMailsRead(){
+  const mails=(_cache.mails[currentUser.username]||[]).map(m=>({...m,read:true}));
+  _cache.mails[currentUser.username]=mails;
+  markMailsReadAsync(currentUser.username).catch(e=>console.error('markRead',e));
+  updateMailBadge();
+}
+async function markAllRead(){ await markMailsRead(); renderUserMailbox(); showToast('すべて既読にしました'); }
+
+// ── 経費ステータス更新: GASに直接送る ──
+async function updateExpense(username,expId,newStatus){
+  try {
+    await updateExpenseStatusAsync(expId,newStatus);
+    const list=loadExpenses(username);
+    const e=list.find(x=>x.id===expId);
+    if(e){ e.status=newStatus; _cache.expenses[username]=list; }
+  } catch(err){
+    console.error('updateExpense error:',err);
+    showToast('⚠ 更新に失敗しました: '+err.message); return;
+  }
+  closeModal('expenseModal');
+  await refreshExpensesCache();
+  renderAdminExpenses();
+  updatePendingBadge();
+  showToast('ステータスを更新しました');
+}
+
+// 経費キャッシュを最新化（Supabase版）
+async function refreshExpensesCache(){
+  try {
+    for(const u of REGULAR_USERS){
+      _cache.expenses[u.username]=await loadExpensesAsync(u.username);
+    }
+  } catch(e){ console.error('refreshExpenses error',e); }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ログイン後 一括プリロード（Supabase版）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function preloadAllData(){
+  loadingShow('データを読み込んでいます...');
+  try {
+    // 祝日（全ユーザー共通）
+    _cache.holidays = await loadHolidaysAsync();
+
+    // ユーザーごとの設定・経費・メール（並列取得で高速化）
+    await Promise.all(REGULAR_USERS.map(async u=>{
+      _cache.settings[u.username] = await loadUserSettingsAsync(u.username);
+      _cache.expenses[u.username] = await loadExpensesAsync(u.username);
+      _cache.mails[u.username]    = await loadMailsAsync(u.username);
+    }));
+
+    // 当月前後3ヶ月の打刻ログ・賞与を一括取得
+    const now=new Date();
+    for(let mo=-2;mo<=1;mo++){
+      const d=new Date(now.getFullYear(),now.getMonth()+mo,1);
+      const month=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+
+      // 月別打刻ログ（全ユーザー一括）
+      const allDays=await getAllUsersDaysAsync(month);
+      for(const u of REGULAR_USERS){
+        const userDays=allDays[u.username]||{};
+        Object.entries(userDays).forEach(([date,data])=>{
+          _cache.days[`${u.username}_${date}`]=data;
+        });
+      }
+
+      // 賞与（並列）
+      const bonuses=await loadMonthBonusesAsync(month);
+      for(const u of REGULAR_USERS){
+        _cache.bonuses[`${u.username}_${month}`]=bonuses[u.username]||0;
+      }
+    }
+  } catch(e){
+    console.error('preload error',e);
+    showToast('⚠ データ読み込みエラー: '+e.message);
+  }
+  loadingHide();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MASTER DATA
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const USERS = [
+  { username:'Magis',    password:'Amano1939', role:'admin',  display:'Magis' },
+  { username:'Shuntaro', password:'Hara',      role:'user',   display:'Shuntaro' },
+  { username:'Taisei',   password:'Tanaka',    role:'user',   display:'Taisei'   },
+];
+const REGULAR_USERS = USERS.filter(u=>u.role==='user');
+let currentUser = null;
+
+// ── USER SETTINGS ──
+// settings: { wageHistory: [{from:"YYYY-MM", wage:1800},...], paymentType:"salary"|"contract" }
+// wageHistory は from の昇順で管理。指定月に有効な時給 = from<=month の最後のエントリ。
+function loadUserSettings(username) {
+  const raw = localStorage.getItem(`tr_settings_${username}`);
+  if (raw) try {
+    const parsed = JSON.parse(raw);
+    // 旧形式（hourlyWage直置き）を新形式に変換
+    if (typeof parsed.hourlyWage === 'number' && !parsed.wageHistory) {
+      parsed.wageHistory = [{ from: '2000-01', wage: parsed.hourlyWage }];
+      delete parsed.hourlyWage;
+    }
+    if (!parsed.wageHistory) parsed.wageHistory = [{ from: '2000-01', wage: 1800 }];
+    return parsed;
+  } catch {}
+  return { wageHistory: [{ from: '2000-01', wage: 1800 }], paymentType: 'salary' };
+}
+function saveUserSettings(username, s) {
+  localStorage.setItem(`tr_settings_${username}`, JSON.stringify(s));
+}
+// 指定月（"YYYY-MM"）に有効な時給を返す
+function getWageForMonth(username, monthStr) {
+  const s = loadUserSettings(username);
+  const history = [...s.wageHistory].sort((a,b)=>a.from.localeCompare(b.from));
+  let wage = history[0]?.wage || 1800;
+  for (const h of history) {
+    if (h.from <= monthStr) wage = h.wage;
+    else break;
+  }
+  return wage;
+}
+// 現在（最新）の時給を返す
+function getCurrentWage(username) {
+  const s = loadUserSettings(username);
+  const history = [...s.wageHistory].sort((a,b)=>a.from.localeCompare(b.from));
+  return history[history.length-1]?.wage || 1800;
+}
+
+// loadExpenses/saveExpenses → GAS層に置き換え済み
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// AUTH
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function doLogin() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  const found = USERS.find(x=>x.username===u && x.password===p);
+  if (!found) { document.getElementById('loginErr').textContent='ユーザー名またはパスワードが正しくありません'; return; }
+  document.getElementById('loginErr').textContent='';
+  currentUser = found;
+  await preloadAllData();
+  if (found.role==='admin') showAdmin(); else showUser();
+}
+document.getElementById('loginPass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+
+function doLogout() {
+  currentUser=null;
+  document.getElementById('loginUser').value='';
+  document.getElementById('loginPass').value='';
+  showPage('loginPage'); stopClock();
+}
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// DATA STORE → GAS層に置き換え済み
+
+const WD=['日','月','火','水','木','金','土'];
+let clockInterval=null;
+
+function todayStr(){
+  const n=new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+}
+function nowMonthStr(){
+  const n=new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TABS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function switchUserTab(name) {
+  document.querySelectorAll('#userPage .tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#userPage .tab-content').forEach(c=>c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById(`userTab${name.charAt(0).toUpperCase()+name.slice(1)}`).classList.add('active');
+  if(name==='expense') renderUserExpenses();
+  if(name==='salary') renderUserSalary();
+  if(name==='mailbox'){ renderUserMailbox(); setTimeout(markMailsRead, 500); }
+}
+function switchAdminTab(name) {
+  document.querySelectorAll('#adminPage .tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#adminPage .tab-content').forEach(c=>c.classList.remove('active'));
+  event.target.classList.add('active');
+  const capName=name.charAt(0).toUpperCase()+name.slice(1);
+  document.getElementById(`adminTab${capName}`).classList.add('active');
+  if(name==='monthly') renderMonthly();
+  if(name==='expenses') { refreshExpensesCache().then(()=>{ renderAdminExpenses(); updatePendingBadge(); }); }
+  if(name==='settings') renderSettings();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// CLOCK
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function startClock(){
+  lastCheckedDate=todayStr();
+  updateClock();
+  clockInterval=setInterval(()=>{ updateClock(); checkDateChange(); },1000);
+}
+function stopClock(){ clearInterval(clockInterval); }
+function updateClock(){
+  const now=new Date();
+  document.getElementById('uDate').textContent=`${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日（${WD[now.getDay()]}）`;
+  document.getElementById('uTimeHM').textContent=now.toTimeString().slice(0,5);
+  document.getElementById('uTimeSec').textContent=':'+now.toTimeString().slice(6,8);
+  updateSummary(now);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// USER PAGE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let uDay=null;
+let uDayDate=null; // uDayが対応する日付文字列
+
+async function showUser(){
+  document.getElementById('topUser').textContent=currentUser.display;
+  document.getElementById('expDate').value=todayStr();
+  document.getElementById('userMonthPicker').value=nowMonthStr();
+  initUDay();
+  // 最新メールを取得
+  try {
+    _cache.mails[currentUser.username]=await loadMailsAsync(currentUser.username);
+  } catch(e){ console.error('getMails error',e); }
+  renderUserUI(); startClock(); updateMailBadge(); showPage('userPage');
+}
+
+// uDayを今日の日付で初期化
+function initUDay(){
+  const today=todayStr();
+  uDay=loadDay(currentUser.username,today);
+  uDayDate=today;
+}
+
+// 日付が変わった瞬間を検知して自動退勤→自動出勤
+let lastCheckedDate=todayStr();
+function checkDateChange(){
+  const today=todayStr();
+  if(today===lastCheckedDate) return;
+  lastCheckedDate=today;
+
+  // 出勤中 or 休憩中なら前日に自動退勤を記録
+  if(uDay && (uDay.state==='in'||uDay.state==='break')){
+    const midnightTs=new Date(today+'T00:00:00').toISOString();
+    const midnightTimeStr='00:00:00';
+
+    // 休憩中なら休憩終了も自動挿入（23:59:59）
+    if(uDay.state==='break'){
+      const endBreakTs=new Date(uDayDate+'T23:59:59').toISOString();
+      uDay.logs.push({id:uid(),type:'return',timeStr:'23:59:59.999',ts:endBreakTs});
+      if(uDay.breakStart){
+        uDay.totalBreak+=new Date(endBreakTs)-new Date(uDay.breakStart);
+        uDay.breakStart=null;
+      }
+    }
+
+    // 23:59:59 に退勤を自動記録
+    const autoOutTs=new Date(uDayDate+'T23:59:59.999').toISOString();
+    uDay.logs.push({id:uid(),type:'out',timeStr:'23:59:59.999',ts:autoOutTs});
+    uDay.state='done'; uDay.outTime=autoOutTs;
+    saveDay(currentUser.username,uDayDate,uDay);
+
+    // 今日の新規データに切り替えて 00:00:00 に自動出勤
+    uDayDate=today;
+    uDay=loadDay(currentUser.username,today);
+    const autoInTs=new Date(today+'T00:00:00.000').toISOString();
+    uDay.logs.push({id:uid(),type:'in',timeStr:'00:00:00.000',ts:autoInTs});
+    uDay.state='in'; uDay.inTime=autoInTs;
+    saveDay(currentUser.username,uDayDate,uDay);
+
+    renderUserUI();
+    showToast('🌙 日付が変わりました。自動で退勤・出勤を記録しました。');
+  } else {
+    // 出勤していなければ今日のデータに切り替えるだけ
+    uDayDate=today;
+    uDay=loadDay(currentUser.username,today);
+    renderUserUI();
+  }
+}
+const typeMap={
+  in:{label:'出勤',cls:'li-in',tagcls:'in'},
+  out:{label:'退勤',cls:'li-out',tagcls:'out'},
+  break:{label:'休憩開始',cls:'li-break',tagcls:'break'},
+  return:{label:'休憩終了',cls:'li-ret',tagcls:'ret'},
+};
+function punch(type){
+  const now=new Date(); const ts=now.toISOString(); const timeStr=now.toTimeString().slice(0,8);
+  if(type==='in'){uDay.state='in'; uDay.inTime=uDay.inTime||ts;}
+  if(type==='out'){uDay.state='done'; uDay.outTime=ts;}
+  if(type==='break'){uDay.state='break'; uDay.breakStart=ts;}
+  if(type==='return'){
+    uDay.state='in';
+    if(uDay.breakStart){uDay.totalBreak+=now-new Date(uDay.breakStart); uDay.breakStart=null;}
+  }
+  uDay.logs.push({id:uid(),type,timeStr,ts});
+  saveDay(currentUser.username,uDayDate,uDay);
+  renderUserUI(); showToast(typeMap[type].label+' を打刻しました');
+}
+function uid(){return Math.random().toString(36).slice(2,9);}
+function renderUserUI(){ updateButtons(); updateBadge(); renderUserLog(); }
+function updateButtons(){
+  const s=uDay.state;
+  document.getElementById('pIn').disabled=s==='in'||s==='break';
+  document.getElementById('pOut').disabled=s!=='in';
+  document.getElementById('pBrk').disabled=s!=='in';
+  document.getElementById('pRet').disabled=s!=='break';
+}
+const badgeMap={out:{cls:'out',text:'● 未出勤'},in:{cls:'in',text:'● 勤務中'},break:{cls:'break',text:'● 休憩中'},done:{cls:'done',text:'● 退勤済'}};
+function updateBadge(){
+  const b=badgeMap[uDay.state];
+  const el=document.getElementById('uBadge');
+  el.className='badge '+b.cls; el.textContent=b.text;
+}
+function renderUserLog(){
+  const list=document.getElementById('uLogList');
+  const logs=[...uDay.logs].reverse();
+  if(!logs.length){list.innerHTML='<li class="empty-note">打刻記録がありません</li>';return;}
+  list.innerHTML=logs.map(l=>{
+    const info=typeMap[l.type]||{label:l.type,cls:'li-in'};
+    return `<li class="log-item ${info.cls}"><span class="log-type">${info.label}</span><span class="log-time">${l.timeStr}</span></li>`;
+  }).join('');
+}
+function updateSummary(now){
+  if(!uDay) return;
+  const inLogs=uDay.logs.filter(l=>l.type==='in').sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+  const outLogs=uDay.logs.filter(l=>l.type==='out').sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+  document.getElementById('sIn').textContent=inLogs.length?new Date(inLogs[0].ts).toTimeString().slice(0,5):'--:--';
+  document.getElementById('sOut').textContent=outLogs.length?new Date(outLogs[0].ts).toTimeString().slice(0,5):'--:--';
+  if(!inLogs.length){document.getElementById('sWork').textContent='0:00';return;}
+  const ms=calcWorkFromLogs(uDay.logs,now);
+  document.getElementById('sWork').textContent=fmtMs(ms);
+}
+function userClearLog(){
+  if(!confirm('打刻をリセットしますか？')) return;
+  uDay=defaultDay();
+  saveDay(currentUser.username,uDayDate||todayStr(),uDay);
+  uDayDate=todayStr();
+  renderUserUI(); showToast('リセットしました');
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// EXPENSE (USER)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function submitExpense(){
+  const date=document.getElementById('expDate').value;
+  const type=document.getElementById('expType').value;
+  const title=document.getElementById('expTitle').value.trim();
+  const amount=parseInt(document.getElementById('expAmount').value);
+  const note=document.getElementById('expNote').value.trim();
+  if(!date||!title||!amount||amount<=0){showToast('入力内容を確認してください');return;}
+  const exp={id:uid(),date,type,title,amount,note:note||'',status:'pending',submittedAt:new Date().toISOString()};
+  if(!_cache.expenses[currentUser.username]) _cache.expenses[currentUser.username]=[];
+  _cache.expenses[currentUser.username].unshift(exp);
+  try {
+    await saveExpenseAsync(currentUser.username,exp);
+  } catch(err){ console.error('submitExpense error:',err); }
+  document.getElementById('expTitle').value='';
+  document.getElementById('expAmount').value='';
+  document.getElementById('expNote').value='';
+  renderUserExpenses(); showToast('申請しました');
+}
+function renderUserExpenses(){
+  const list=loadExpenses(currentUser.username).sort((a,b)=>b.submittedAt.localeCompare(a.submittedAt));
+  const el=document.getElementById('userExpenseList');
+  if(!list.length){el.innerHTML='<div class="empty-note">申請記録がありません</div>';return;}
+  const typeLabel={transport:'交通費',expense:'経費'};
+  el.innerHTML='<div class="expense-list">'+list.map(e=>`
+    <div class="expense-item">
+      <div class="ei-meta">
+        <div class="ei-title">${e.title} <span class="chip ${e.type==='transport'?'blue':'amber'}">${typeLabel[e.type]||e.type}</span></div>
+        <div class="ei-detail">${e.date}${e.note?' / '+e.note:''}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="ei-amount">¥${e.amount.toLocaleString()}</div>
+        <div style="margin-top:4px;"><span class="expense-status ${e.status}">${statusLabel(e.status)}</span></div>
+      </div>
+    </div>`).join('')+'</div>';
+}
+function statusLabel(s){return{pending:'承認待ち',approved:'承認済み',rejected:'却下'}[s]||s;}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ADMIN PAGE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let adminDate=todayStr();
+async function showAdmin(){
+  adminDate=todayStr();
+  document.getElementById('adminDatePicker').value=adminDate;
+  document.getElementById('monthPicker').value=nowMonthStr();
+  const sel=document.getElementById('expUserFilter');
+  sel.innerHTML='<option value="">全ユーザー</option>'+REGULAR_USERS.map(u=>`<option value="${u.username}">${u.display}</option>`).join('');
+  renderDaily();
+  // 最新経費を取得してからバッジ表示
+  await refreshExpensesCache();
+  updatePendingBadge();
+  showPage('adminPage');
+}
+function setAdminDateToday(){adminDate=todayStr();document.getElementById('adminDatePicker').value=adminDate;renderDaily();}
+function setMonthToday(){document.getElementById('monthPicker').value=nowMonthStr();renderMonthly();}
+
+// ── DAILY ──
+function renderDaily(){
+  adminDate=document.getElementById('adminDatePicker').value||todayStr();
+  const d=new Date(adminDate);
+  document.getElementById('adminDateLabel').textContent=`${adminDate.replace(/-/g,'/')} （${WD[d.getDay()]}）`;
+  const container=document.getElementById('adminUserCards');
+  container.innerHTML='';
+  REGULAR_USERS.forEach(u=>{
+    const day=loadDay(u.username,adminDate);
+    container.appendChild(buildUserCard(u,day));
+  });
+}
+
+function buildUserCard(u,day){
+  const now=new Date();
+  const workMs=calcWorkFromLogs(day.logs,now);
+  const brkMs=calcBreakMs(day.logs,now);
+  const inLogs=day.logs.filter(l=>l.type==='in').sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+  const outLogs=day.logs.filter(l=>l.type==='out').sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+  const firstIn=inLogs.length?inLogs[0].ts:null;
+  const lastOut=outLogs.length?outLogs[0].ts:null;
+  const stateLabels={out:'未出勤',in:'勤務中',break:'休憩中',done:'退勤済'};
+  const stateCss={out:'color:var(--text3)',in:'color:var(--green);font-weight:700',break:'color:var(--amber);font-weight:700',done:'color:var(--text2)'};
+  const wage=getWageForMonth(u.username, adminDate.slice(0,7));
+  // 割増賃金込みの概算（calcDaySalary使用）
+  const daySal=day.logs.length>0?calcDaySalary(day.logs,adminDate,wage):{totalPay:0};
+  const card=document.createElement('div');
+  card.className='user-card'; card.id=`uc-${u.username}`;
+  card.innerHTML=`
+    <div class="user-card-header">
+      <div class="user-name-row">
+        <div class="avatar">${u.display[0]}</div>
+        <div><div class="u-name">${u.display}</div>
+          <div class="u-state" style="${stateCss[day.state]}">● ${stateLabels[day.state]}</div></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span class="chip blue" style="font-size:11px;">時給 ¥${wage.toLocaleString()}</span>
+        <button class="btn-add" onclick="openAddModal('${u.username}')">＋ 打刻追加</button>
+      </div>
+    </div>
+    <div class="user-stat-grid">
+      <div class="user-stat"><label>出勤</label><div class="sv green">${fmtTime(firstIn)}</div></div>
+      <div class="user-stat"><label>退勤</label><div class="sv red">${fmtTime(lastOut)}</div></div>
+      <div class="user-stat"><label>実働時間</label><div class="sv amber">${inLogs.length?fmtMs(workMs):'--'}</div></div>
+      <div class="user-stat"><label>休憩時間</label><div class="sv">${brkMs>0?fmtMs(brkMs):'--'}</div></div>
+      <div class="user-stat"><label>概算賃金</label><div class="sv green">¥${daySal.totalPay.toLocaleString()}</div></div>
+    </div>
+    <button class="toggle-log" onclick="toggleAdminLog('${u.username}')">▸ 打刻ログ（${day.logs.length}件）</button>
+    <div id="alog-${u.username}" style="display:none;">${buildAdminLog(u,day)}</div>`;
+  return card;
+}
+function buildAdminLog(u,day){
+  if(!day.logs.length) return '<div class="admin-log-wrap"><p class="empty-note">打刻記録がありません</p></div>';
+  const rows=[...day.logs].sort((a,b)=>new Date(a.ts)-new Date(b.ts)).map(l=>{
+    const info=typeMap[l.type]||{label:l.type,tagcls:'in'};
+    return `<tr><td><span class="tag ${info.tagcls}">${info.label}</span></td>
+      <td class="mono">${l.timeStr}</td>
+      <td style="text-align:right;"><button class="btn-sm" onclick="openEditModal('${u.username}','${l.id}')">編集</button></td></tr>`;
+  }).join('');
+  return `<div class="admin-log-wrap"><table class="admin-log-table">
+    <thead><tr><th>種別</th><th>時刻</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function toggleAdminLog(username){
+  const el=document.getElementById(`alog-${username}`);
+  const btn=el.previousElementSibling;
+  if(el.style.display==='none'){el.style.display='block';btn.textContent=btn.textContent.replace('▸','▾');}
+  else{el.style.display='none';btn.textContent=btn.textContent.replace('▾','▸');}
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MONTHLY / SALARY CALCULATION
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/*
+  割増賃金ロジック:
+  - 通常: 時給 × 時間
+  - 時間外(1日8h超): +25%
+  - 深夜(22:00-05:00): +25%
+  - 時間外かつ深夜: +50% (25+25合算)
+  - 法定休日(日曜): +35%
+  - 法定休日かつ深夜: +60% (35+25合算)
+*/
+function calcDaySalary(logs, dateStr, hourlyWage) {
+  const date = new Date(dateStr);
+  const isHoliday = date.getDay() === 0 || isHolidayDate(dateStr);
+  const sorted = [...logs].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+
+  // ── セグメント（in→out）とbreakを構築 ──
+  let segments = [], breaks = [];
+  let currentIn=null, breakStart=null;
+  for (const l of sorted) {
+    if (l.type==='in')    { currentIn=new Date(l.ts); }
+    if (l.type==='out' && currentIn) { segments.push({start:currentIn,end:new Date(l.ts)}); currentIn=null; }
+    if (l.type==='break') { breakStart=new Date(l.ts); }
+    if (l.type==='return' && breakStart) { breaks.push({start:breakStart,end:new Date(l.ts)}); breakStart=null; }
+  }
+  if (currentIn) segments.push({start:currentIn,end:new Date()});
+
+  // ── breakを除いた実働セグメントを生成 ──
+  function subtractBreaks(seg) {
+    // セグメントをbreakで切り刻んで実働区間リストを返す
+    let intervals = [{start:seg.start, end:seg.end}];
+    for (const brk of breaks) {
+      intervals = intervals.flatMap(iv => {
+        if (brk.end<=iv.start || brk.start>=iv.end) return [iv];
+        const parts = [];
+        if (iv.start < brk.start) parts.push({start:iv.start, end:brk.start});
+        if (brk.end < iv.end)     parts.push({start:brk.end,  end:iv.end});
+        return parts;
+      });
+    }
+    return intervals;
+  }
+
+  // ── 時間帯をミリ秒で分類 ──
+  // 夜間境界(22:00 / 05:00)でインターバルを分割し各msを振り分ける
+  function classifyMs(ivStart, ivEnd, workedMsSoFar) {
+    // 境界時刻(当日・翌日)を生成してソート
+    const boundaries = new Set([ivStart.getTime(), ivEnd.getTime()]);
+    const base = new Date(ivStart); base.setHours(0,0,0,0);
+    [0,5,22,24,29].forEach(h => {  // 0,5,22 = 当日; 24,29 = 翌日相当(0,5)
+      const t = new Date(base.getTime() + h*3600000);
+      const ms = t.getTime();
+      if (ms > ivStart.getTime() && ms < ivEnd.getTime()) boundaries.add(ms);
+    });
+    // 8h超え境界
+    const overtimeBoundary = ivStart.getTime() + Math.max(0, 8*3600000 - workedMsSoFar);
+    if (overtimeBoundary > ivStart.getTime() && overtimeBoundary < ivEnd.getTime()) boundaries.add(overtimeBoundary);
+
+    const sorted = [...boundaries].sort((a,b)=>a-b);
+    let normalMs=0, nightMs=0, overtimeMs=0, nightOvertimeMs=0, holidayMs=0, holidayNightMs=0;
+    let accWorked = workedMsSoFar;
+
+    for (let i=0; i<sorted.length-1; i++) {
+      const s=sorted[i], e=sorted[i+1], dur=e-s;
+      const mid = new Date((s+e)/2);
+      const h = mid.getHours();
+      const isNight = (h>=22 || h<5);
+      const isOvertime = accWorked >= 8*3600000;
+      accWorked += dur;
+      if (isHoliday) {
+        if (isNight) holidayNightMs+=dur; else holidayMs+=dur;
+      } else if (isOvertime) {
+        if (isNight) nightOvertimeMs+=dur; else overtimeMs+=dur;
+      } else {
+        if (isNight) nightMs+=dur; else normalMs+=dur;
+      }
+    }
+    return {normalMs,nightMs,overtimeMs,nightOvertimeMs,holidayMs,holidayNightMs,
+            workedMs: ivEnd.getTime()-ivStart.getTime()};
+  }
+
+  // ── 全セグメントを処理 ──
+  let totalWorkMs=0;
+  let normalMs=0,nightMs=0,overtimeMs=0,nightOvertimeMs=0,holidayMs=0,holidayNightMs=0;
+  let workedMsSoFar=0;
+
+  for (const seg of segments) {
+    const workIntervals = subtractBreaks(seg);
+    for (const iv of workIntervals) {
+      const dur = iv.end - iv.start;
+      totalWorkMs += dur;
+      const r = classifyMs(iv.start, iv.end, workedMsSoFar);
+      normalMs+=r.normalMs; nightMs+=r.nightMs;
+      overtimeMs+=r.overtimeMs; nightOvertimeMs+=r.nightOvertimeMs;
+      holidayMs+=r.holidayMs; holidayNightMs+=r.holidayNightMs;
+      workedMsSoFar += dur;
+    }
+  }
+
+  const perMs = hourlyWage / 3600000;
+  const normalPay        = Math.round(normalMs        * perMs * 1.00);
+  const nightPay         = Math.round(nightMs         * perMs * 1.25);
+  const overtimePay      = Math.round(overtimeMs      * perMs * 1.25);
+  const nightOvertimePay = Math.round(nightOvertimeMs * perMs * 1.50);
+  const holidayPay       = Math.round(holidayMs       * perMs * 1.35);
+  const holidayNightPay  = Math.round(holidayNightMs  * perMs * 1.60);
+  const totalPay = normalPay+nightPay+overtimePay+nightOvertimePay+holidayPay+holidayNightPay;
+
+  return {
+    totalWorkMs,
+    normalMs, nightMs, overtimeMs, nightOvertimeMs, holidayMs, holidayNightMs,
+    normalPay, nightPay, overtimePay, nightOvertimePay, holidayPay, holidayNightPay,
+    totalPay,
+    // 後方互換（min表示用）
+    normalMin:Math.round(normalMs/60000), nightMin:Math.round(nightMs/60000),
+    overtimeMin:Math.round(overtimeMs/60000), nightOvertimeMin:Math.round(nightOvertimeMs/60000),
+    holidayMin:Math.round(holidayMs/60000), holidayNightMin:Math.round(holidayNightMs/60000),
+  };
+}
+
+// ── 共通: 給与サマリーボックス生成 ──
+// isAdmin=true のとき支払い種別・時給コントロール表示
+function buildSalaryBox(totalPay, expTotal, payType, totalMs, wage, isAdmin, bonus=0){
+  const isContract = payType==='contract';
+  // 業務委託の場合は給与・経費ともに1.1倍（税込）
+  const basePay  = isContract ? Math.round(totalPay * 1.1) : totalPay;
+  const baseExp  = isContract ? Math.round(expTotal  * 1.1) : expTotal;
+  const baseBonus = isContract ? Math.round(bonus * 1.1) : bonus;
+  const grandTotal = basePay + baseExp + baseBonus;
+  const payLabel = isContract ? '業務委託費（税込）' : '給与合計';
+  const taxNote  = isContract ? ' (税込)' : '';
+
+  const rows = [];
+  rows.push(`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06);">
+    <span style="font-size:13px;color:var(--text2);">${payLabel}</span>
+    <span style="font-family:var(--mono);font-weight:600;">¥${basePay.toLocaleString()}${taxNote}</span>
+  </div>`);
+  if(expTotal>0){
+    rows.push(`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06);">
+      <span style="font-size:13px;color:var(--text2);">承認済み経費${taxNote}</span>
+      <span style="font-family:var(--mono);font-weight:600;">¥${baseExp.toLocaleString()}${taxNote}</span>
+    </div>`);
+  }
+  if(bonus>0){
+    rows.push(`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06);">
+      <span style="font-size:13px;color:var(--text2);">賞与${taxNote}</span>
+      <span style="font-family:var(--mono);font-weight:600;color:var(--purple);">¥${baseBonus.toLocaleString()}${taxNote}</span>
+    </div>`);
+  }
+  rows.push(`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0 0;">
+    <span style="font-size:14px;font-weight:700;color:var(--green);">支払い総額${taxNote}</span>
+    <span style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--green);">¥${grandTotal.toLocaleString()}</span>
+  </div>`);
+
+  return `<div class="salary-box">
+    <div class="label">月間サマリー</div>
+    <div style="margin-top:4px;">${rows.join('')}</div>
+    <div class="note" style="margin-top:10px;">総実働: ${fmtMs(totalMs)}${isAdmin?' ／ 時給: ¥'+wage.toLocaleString():''}${isContract?' ／ 経費・給与ともに消費税込み':''}</div>
+  </div>`;
+}
+
+function renderMonthly(){
+  const month=document.getElementById('monthPicker').value||nowMonthStr();
+  const [year,mon]=month.split('-').map(Number);
+  const daysInMonth=new Date(year,mon,0).getDate();
+  const container=document.getElementById('monthlyContent');
+  container.innerHTML='';
+
+  REGULAR_USERS.forEach(u=>{
+    const settings=loadUserSettings(u.username);
+    const payType=settings.paymentType;
+    // 月の時給は getWageForMonth で取得（給与改定対応）
+    const wage=getWageForMonth(u.username, month);
+
+    let monthTotalMs=0;
+    let monthNormalMs=0,monthNightMs=0,monthOvertimeMs=0,monthNightOvertimeMs=0,monthHolidayMs=0,monthHolidayNightMs=0;
+    let monthNormalMin=0,monthNightMin=0,monthOvertimeMin=0,monthNightOvertimeMin=0,monthHolidayMin=0,monthHolidayNightMin=0;
+    let monthTotalPay=0;
+
+    const dayRows=[];
+    for(let d=1;d<=daysInMonth;d++){
+      const dateStr=`${year}-${String(mon).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dt=new Date(dateStr);
+      const wd=WD[dt.getDay()];
+      const isHoliday=dt.getDay()===0;
+      const isSat=dt.getDay()===6;
+      const day=loadDay(u.username,dateStr);
+      let sal={totalWorkMs:0,totalPay:0,normalMs:0,nightMs:0,overtimeMs:0,nightOvertimeMs:0,holidayMs:0,holidayNightMs:0,normalMin:0,nightMin:0,overtimeMin:0,nightOvertimeMin:0,holidayMin:0,holidayNightMin:0};
+      if(day.logs.length) sal=calcDaySalary(day.logs,dateStr,wage);
+      monthTotalMs+=sal.totalWorkMs;
+      monthNormalMs+=sal.normalMs; monthNightMs+=sal.nightMs;
+      monthOvertimeMs+=sal.overtimeMs; monthNightOvertimeMs+=sal.nightOvertimeMs;
+      monthHolidayMs+=sal.holidayMs; monthHolidayNightMs+=sal.holidayNightMs;
+      monthNormalMin+=sal.normalMin; monthNightMin+=sal.nightMin;
+      monthOvertimeMin+=sal.overtimeMin; monthNightOvertimeMin+=sal.nightOvertimeMin;
+      monthHolidayMin+=sal.holidayMin; monthHolidayNightMin+=sal.holidayNightMin;
+      monthTotalPay+=sal.totalPay;
+
+      const isManualHoliday=isHolidayDate(dateStr);
+      const isEffHoliday=isHoliday||isManualHoliday;
+      const worked=sal.totalWorkMs>0;
+      dayRows.push(`<tr class="${isEffHoliday?'holiday':isSat?'sat':''}">
+        <td>
+          <span style="cursor:pointer;text-decoration:underline dotted;" onclick="openHolidayModal('${dateStr}')" title="${isManualHoliday?'祝日名を編集・解除':'祝日に設定'}">
+            ${d}日（${wd}）${isManualHoliday?`<span class="chip red" style="font-size:9px;padding:1px 5px;margin-left:4px;">${getHolidayName(dateStr)||'祝'}</span>`:''}
+          </span>
+        </td>
+        <td class="mono">${worked?fmtMs(sal.totalWorkMs):'--'}</td>
+        <td class="mono right">${sal.normalMin?min2h(sal.normalMin):'--'}</td>
+        <td class="mono right">${sal.overtimeMin?min2h(sal.overtimeMin):'--'}</td>
+        <td class="mono right">${sal.nightMin?min2h(sal.nightMin):'--'}</td>
+        <td class="mono right">${sal.nightOvertimeMin?min2h(sal.nightOvertimeMin):'--'}</td>
+        <td class="mono right">${sal.holidayMin?min2h(sal.holidayMin):'--'}</td>
+        <td class="mono right">${sal.holidayNightMin?min2h(sal.holidayNightMin):'--'}</td>
+        <td class="mono right">${worked?'¥'+sal.totalPay.toLocaleString():'--'}</td>
+      </tr>`);
+    }
+
+    // Payment type calc
+    let payDisplay='';
+    if(payType==='contract'){
+      const taxed=Math.round(monthTotalPay*1.1);
+      payDisplay=`<div style="font-size:13px;color:var(--text2);margin-top:6px;">業務委託費（税込）: <span style="font-family:var(--mono);font-weight:700;color:var(--blue);">¥${taxed.toLocaleString()} (税込)</span></div>`;
+    }
+
+    // Expense total for the month
+    const allExp=loadExpenses(u.username).filter(e=>{
+      return e.date.startsWith(month) && e.status==='approved';
+    });
+    const expTotal=allExp.reduce((s,e)=>s+e.amount,0);
+    // Bonus for the month
+    const bonus=loadBonus(u.username, month);
+
+    // Salary type selector
+    const currentWage=getCurrentWage(u.username);
+    const typeSelectHtml=`<div class="salary-type-row">
+      <label>支払い種別：</label>
+      <select onchange="changePayType('${u.username}',this.value)">
+        <option value="salary" ${payType==='salary'?'selected':''}>給与</option>
+        <option value="contract" ${payType==='contract'?'selected':''}>業務委託費</option>
+      </select>
+      <span style="font-size:12px;color:var(--text2);margin-left:8px;">この月の時給: <strong>¥${wage.toLocaleString()}</strong></span>
+    </div>`;
+
+    // Bonus UI
+    const bonusHtml=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);margin-top:10px;">
+      <span style="font-size:12px;color:var(--text2);font-weight:600;">賞与：</span>
+      <input type="number" min="0" placeholder="0" value="${bonus||''}"
+        id="bonusInput_${u.username}_${month}"
+        style="width:130px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:13px;background:var(--surface);outline:none;"
+        onchange="saveBonus('${u.username}','${month}',this.value)">
+      <span style="font-size:12px;color:var(--text2);">円</span>
+      ${bonus>0?`<span class="chip purple" style="font-size:11px;">賞与 ¥${bonus.toLocaleString()} 設定済み</span>`:''}
+      ${bonus>0?`<button class="btn-primary" style="font-size:11px;padding:5px 12px;"
+        onclick="sendBonusNotice('${u.username}','${month}',${bonus})">賞与通知を送る</button>`:''}
+    </div>`;
+
+    const div=document.createElement('div');
+    div.className='month-user-card';
+    div.innerHTML=`
+      <div class="month-user-header">
+        <div class="user-name-row"><div class="avatar">${u.display[0]}</div><div class="u-name">${u.display}</div></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-size:12px;color:var(--text2);">${year}年${mon}月</div>
+          <button class="btn-primary" style="font-size:11px;padding:5px 14px;"
+            onclick="sendPaymentNotice('${u.username}','${month}',${monthTotalPay},${expTotal},${bonus||0},'${payType}')">
+            💳 支払い通知を送る
+          </button>
+        </div>
+      </div>
+      <div style="padding:16px 18px 0;">
+        ${typeSelectHtml}
+        ${bonusHtml}
+        ${buildSalaryBox(monthTotalPay, expTotal, payType, monthTotalMs, wage, true, bonus||0)}
+        <hr class="divider">
+        <div class="section-label" style="margin-bottom:8px;">内訳</div>
+        <table class="salary-table">
+          <thead><tr>
+            <th>区分</th><th>割増率</th><th class="right">時間</th><th class="right">金額</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>通常労働</td><td>100%</td><td class="mono right">${monthNormalMs?fmtMs(monthNormalMs):'--'}</td><td class="mono right">¥${Math.round(monthNormalMs/3600000*wage).toLocaleString()}</td></tr>
+            <tr><td>時間外労働（法定超）</td><td>125%</td><td class="mono right">${monthOvertimeMs?fmtMs(monthOvertimeMs):'--'}</td><td class="mono right">¥${Math.round(monthOvertimeMs/3600000*wage*1.25).toLocaleString()}</td></tr>
+            <tr><td>深夜労働（22:00-5:00）</td><td>125%</td><td class="mono right">${monthNightMs?fmtMs(monthNightMs):'--'}</td><td class="mono right">¥${Math.round(monthNightMs/3600000*wage*1.25).toLocaleString()}</td></tr>
+            <tr><td>時間外かつ深夜</td><td>150%</td><td class="mono right">${monthNightOvertimeMs?fmtMs(monthNightOvertimeMs):'--'}</td><td class="mono right">¥${Math.round(monthNightOvertimeMs/3600000*wage*1.50).toLocaleString()}</td></tr>
+            <tr><td>法定休日労働（日曜）</td><td>135%</td><td class="mono right">${monthHolidayMs?fmtMs(monthHolidayMs):'--'}</td><td class="mono right">¥${Math.round(monthHolidayMs/3600000*wage*1.35).toLocaleString()}</td></tr>
+            <tr><td>法定休日かつ深夜</td><td>160%</td><td class="mono right">${monthHolidayNightMs?fmtMs(monthHolidayNightMs):'--'}</td><td class="mono right">¥${Math.round(monthHolidayNightMs/3600000*wage*1.60).toLocaleString()}</td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="2">合計</td><td class="mono right">${fmtMs(monthTotalMs)}</td><td class="mono right">¥${monthTotalPay.toLocaleString()}</td></tr></tfoot>
+        </table>
+        <hr class="divider">
+        <div class="section-label" style="margin-bottom:8px;">日別明細</div>
+      </div>
+      <table class="month-day-table">
+        <thead><tr>
+          <th>日付</th><th>実働</th><th>通常</th><th>時間外</th>
+          <th>深夜</th><th>時間外+深夜</th><th>休日</th><th>休日+深夜</th><th>賃金</th>
+        </tr></thead>
+        <tbody>${dayRows.join('')}</tbody>
+        <tfoot><tr>
+          <td>合計</td>
+          <td class="mono">${fmtMs(monthTotalMs)}</td>
+          <td class="mono right">${monthNormalMs?fmtMs(monthNormalMs):'--'}</td>
+          <td class="mono right">${monthOvertimeMs?fmtMs(monthOvertimeMs):'--'}</td>
+          <td class="mono right">${monthNightMs?fmtMs(monthNightMs):'--'}</td>
+          <td class="mono right">${monthNightOvertimeMs?fmtMs(monthNightOvertimeMs):'--'}</td>
+          <td class="mono right">${monthHolidayMs?fmtMs(monthHolidayMs):'--'}</td>
+          <td class="mono right">${monthHolidayNightMs?fmtMs(monthHolidayNightMs):'--'}</td>
+          <td class="mono right">¥${monthTotalPay.toLocaleString()}</td>
+        </tr></tfoot>
+      </table>`;
+    container.appendChild(div);
+  });
+}
+
+// ── USER SALARY VIEW ──
+function setUserMonthToday(){
+  document.getElementById('userMonthPicker').value=nowMonthStr();
+  renderUserSalary();
+}
+function renderUserSalary(){
+  const month=document.getElementById('userMonthPicker').value||nowMonthStr();
+  const [year,mon]=month.split('-').map(Number);
+  const daysInMonth=new Date(year,mon,0).getDate();
+  const u=currentUser;
+  const uBonus=loadBonus(u.username, month);
+  const settings=loadUserSettings(u.username);
+  const wage=getWageForMonth(u.username, month);
+  const payType=settings.paymentType;
+
+  let monthTotalMs=0, monthTotalPay=0;
+  let monthNormalMs=0,monthNightMs=0,monthOvertimeMs=0,monthNightOvertimeMs=0,monthHolidayMs=0,monthHolidayNightMs=0;
+  let monthNormalMin=0,monthNightMin=0,monthOvertimeMin=0,monthNightOvertimeMin=0,monthHolidayMin=0,monthHolidayNightMin=0;
+  const dayRows=[];
+
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=`${year}-${String(mon).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dt=new Date(dateStr);
+    const wd=WD[dt.getDay()];
+    const isHoliday=dt.getDay()===0;
+    const isSat=dt.getDay()===6;
+    const day=loadDay(u.username,dateStr);
+    let sal={totalWorkMs:0,totalPay:0,normalMs:0,nightMs:0,overtimeMs:0,nightOvertimeMs:0,holidayMs:0,holidayNightMs:0,normalMin:0,nightMin:0,overtimeMin:0,nightOvertimeMin:0,holidayMin:0,holidayNightMin:0};
+    if(day.logs.length) sal=calcDaySalary(day.logs,dateStr,wage);
+    monthTotalMs+=sal.totalWorkMs;
+    monthNormalMs+=sal.normalMs; monthNightMs+=sal.nightMs;
+    monthOvertimeMs+=sal.overtimeMs; monthNightOvertimeMs+=sal.nightOvertimeMs;
+    monthHolidayMs+=sal.holidayMs; monthHolidayNightMs+=sal.holidayNightMs;
+    monthNormalMin+=sal.normalMin; monthNightMin+=sal.nightMin;
+    monthOvertimeMin+=sal.overtimeMin; monthNightOvertimeMin+=sal.nightOvertimeMin;
+    monthHolidayMin+=sal.holidayMin; monthHolidayNightMin+=sal.holidayNightMin;
+    monthTotalPay+=sal.totalPay;
+    const worked=sal.totalWorkMs>0;
+    dayRows.push(`<tr class="${isHoliday?'holiday':isSat?'sat':''}">
+      <td>${d}日（${wd}）</td>
+      <td class="mono">${worked?fmtMs(sal.totalWorkMs):'--'}</td>
+      <td class="mono right">${sal.normalMin?min2h(sal.normalMin):'--'}</td>
+      <td class="mono right">${sal.overtimeMin?min2h(sal.overtimeMin):'--'}</td>
+      <td class="mono right">${sal.nightMin?min2h(sal.nightMin):'--'}</td>
+      <td class="mono right">${sal.nightOvertimeMin?min2h(sal.nightOvertimeMin):'--'}</td>
+      <td class="mono right">${sal.holidayMin?min2h(sal.holidayMin):'--'}</td>
+      <td class="mono right">${sal.holidayNightMin?min2h(sal.holidayNightMin):'--'}</td>
+      <td class="mono right">${worked?'¥'+sal.totalPay.toLocaleString():'--'}</td>
+    </tr>`);
+  }
+
+  const allExp=loadExpenses(u.username).filter(e=>e.date.startsWith(month)&&e.status==='approved');
+  const expTotal=allExp.reduce((s,e)=>s+e.amount,0);
+  const payTypeLabel=payType==='contract'?'業務委託費':'給与';
+
+  const container=document.getElementById('userSalaryContent');
+  container.innerHTML=`
+    <div class="month-user-card">
+      <div class="month-user-header">
+        <div style="font-weight:700;">${year}年${mon}月 給与明細</div>
+        <span class="chip ${payType==='contract'?'blue':'green'}" style="font-size:11px;">${payTypeLabel}</span>
+      </div>
+      <div style="padding:16px 18px 0;">
+        ${buildSalaryBox(monthTotalPay, expTotal, payType, monthTotalMs, wage, false, loadBonus(u.username, month))}
+        <hr class="divider">
+        <div class="section-label" style="margin-bottom:8px;">内訳</div>
+        <table class="salary-table">
+          <thead><tr><th>区分</th><th>割増率</th><th class="right">時間</th><th class="right">金額</th></tr></thead>
+          <tbody>
+            <tr><td>通常労働</td><td>100%</td><td class="mono right">${monthNormalMs?fmtMs(monthNormalMs):'--'}</td><td class="mono right">¥${Math.round(monthNormalMs/3600000*wage).toLocaleString()}</td></tr>
+            <tr><td>時間外労働（法定超）</td><td>125%</td><td class="mono right">${monthOvertimeMs?fmtMs(monthOvertimeMs):'--'}</td><td class="mono right">¥${Math.round(monthOvertimeMs/3600000*wage*1.25).toLocaleString()}</td></tr>
+            <tr><td>深夜労働（22:00-5:00）</td><td>125%</td><td class="mono right">${monthNightMs?fmtMs(monthNightMs):'--'}</td><td class="mono right">¥${Math.round(monthNightMs/3600000*wage*1.25).toLocaleString()}</td></tr>
+            <tr><td>時間外かつ深夜</td><td>150%</td><td class="mono right">${monthNightOvertimeMs?fmtMs(monthNightOvertimeMs):'--'}</td><td class="mono right">¥${Math.round(monthNightOvertimeMs/3600000*wage*1.50).toLocaleString()}</td></tr>
+            <tr><td>法定休日労働（日曜）</td><td>135%</td><td class="mono right">${monthHolidayMs?fmtMs(monthHolidayMs):'--'}</td><td class="mono right">¥${Math.round(monthHolidayMs/3600000*wage*1.35).toLocaleString()}</td></tr>
+            <tr><td>法定休日かつ深夜</td><td>160%</td><td class="mono right">${monthHolidayNightMs?fmtMs(monthHolidayNightMs):'--'}</td><td class="mono right">¥${Math.round(monthHolidayNightMs/3600000*wage*1.60).toLocaleString()}</td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="2">合計</td><td class="mono right">${fmtMs(monthTotalMs)}</td><td class="mono right">¥${monthTotalPay.toLocaleString()}</td></tr></tfoot>
+        </table>
+        ${expTotal>0?`<hr class="divider">
+        <div class="section-label" style="margin-bottom:8px;">承認済み経費</div>
+        <table class="salary-table">
+          <thead><tr><th>日付</th><th>内容</th><th class="right">金額</th></tr></thead>
+          <tbody>${allExp.map(e=>`<tr><td>${e.date}</td><td>${e.title}</td><td class="mono right">¥${e.amount.toLocaleString()}</td></tr>`).join('')}</tbody>
+          <tfoot><tr><td colspan="2">小計${payType==='contract'?' (税込)':''}</td><td class="mono right">¥${(payType==='contract'?Math.round(expTotal*1.1):expTotal).toLocaleString()}${payType==='contract'?' (税込)':''}</td></tr></tfoot>
+        </table>`:''}
+        <hr class="divider">
+        <div class="section-label" style="margin-bottom:8px;">日別明細</div>
+      </div>
+      <table class="month-day-table">
+        <thead><tr>
+          <th>日付</th><th>実働</th><th>通常</th><th>時間外</th>
+          <th>深夜</th><th>時間外+深夜</th><th>休日</th><th>休日+深夜</th><th>賃金</th>
+        </tr></thead>
+        <tbody>${dayRows.join('')}</tbody>
+        <tfoot><tr>
+          <td>合計</td><td class="mono">${fmtMs(monthTotalMs)}</td>
+          <td class="mono right">${monthNormalMs?fmtMs(monthNormalMs):'--'}</td>
+          <td class="mono right">${monthOvertimeMs?fmtMs(monthOvertimeMs):'--'}</td>
+          <td class="mono right">${monthNightMs?fmtMs(monthNightMs):'--'}</td>
+          <td class="mono right">${monthNightOvertimeMs?fmtMs(monthNightOvertimeMs):'--'}</td>
+          <td class="mono right">${monthHolidayMs?fmtMs(monthHolidayMs):'--'}</td>
+          <td class="mono right">${monthHolidayNightMs?fmtMs(monthHolidayNightMs):'--'}</td>
+          <td class="mono right">¥${monthTotalPay.toLocaleString()}</td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+}
+
+function changePayType(username,val){
+  const s=loadUserSettings(username); s.paymentType=val; saveUserSettings(username,s);
+  renderMonthly(); showToast('支払い種別を更新しました');
+}
+function changeWage(username,val){
+  const w=parseInt(val);
+  if(!w||w<1) return;
+  const s=loadUserSettings(username); s.hourlyWage=w; saveUserSettings(username,s);
+  renderMonthly(); renderDaily(); showToast('時給を更新しました');
+}
+// 給与改定: 指定月から新時給を適用
+function addWageHistory(username, fromMonth, wage){
+  const w=parseInt(wage);
+  if(!w||w<1){ showToast('時給を正しく入力してください'); return; }
+  if(!fromMonth){ showToast('適用開始月を選択してください'); return; }
+  const s=loadUserSettings(username);
+  // 同月エントリがあれば上書き、なければ追加
+  const idx=s.wageHistory.findIndex(h=>h.from===fromMonth);
+  if(idx>=0) s.wageHistory[idx].wage=w;
+  else s.wageHistory.push({from:fromMonth, wage:w});
+  s.wageHistory.sort((a,b)=>a.from.localeCompare(b.from));
+  saveUserSettings(username,s);
+  renderSettings(); renderMonthly(); renderDaily();
+  showToast(`${fromMonth} から 時給 ¥${w.toLocaleString()} に改定しました`);
+}
+function removeWageHistory(username, fromMonth){
+  const s=loadUserSettings(username);
+  if(s.wageHistory.length<=1){ showToast('最低1件の時給設定が必要です'); return; }
+  s.wageHistory=s.wageHistory.filter(h=>h.from!==fromMonth);
+  saveUserSettings(username,s);
+  renderSettings();
+  showToast('削除しました');
+}
+
+// ── HISTORY ──
+function renderHistory(){
+  const container=document.getElementById('historyContent');
+  container.innerHTML='';
+  // キャッシュからロード済みの月を収集
+  const months=new Set();
+  Object.keys(_cache.days).forEach(k=>{
+    const m=k.match(/_(\d{4})-(\d{2})-\d{2}$/);
+    if(m) months.add(`${m[1]}-${m[2]}`);
+  });
+  // ボーナスや経費の月も追加
+  REGULAR_USERS.forEach(u=>{
+    (_cache.expenses[u.username]||[]).forEach(e=>{ if(e.date) months.add(e.date.slice(0,7)); });
+  });
+  const sortedMonths=[...months].sort().reverse();
+  if(!sortedMonths.length){container.innerHTML='<div class="empty-note">データがありません</div>';return;}
+
+  REGULAR_USERS.forEach(u=>{
+    const settings=loadUserSettings(u.username);
+    const rows=sortedMonths.map(month=>{
+      const [year,mon]=month.split('-').map(Number);
+      const daysInMonth=new Date(year,mon,0).getDate();
+      let totalMs=0,totalPay=0;
+      const wage=getWageForMonth(u.username, month);
+      const payType=settings.paymentType;
+      for(let d=1;d<=daysInMonth;d++){
+        const ds=`${year}-${String(mon).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const day=loadDay(u.username,ds);
+        if(day.logs.length){
+          const s=calcDaySalary(day.logs,ds,wage);
+          totalMs+=s.totalWorkMs; totalPay+=s.totalPay;
+        }
+      }
+      const expTotal=loadExpenses(u.username).filter(e=>e.date.startsWith(month)&&e.status==='approved').reduce((s,e)=>s+e.amount,0);
+      const isContract2=payType==='contract';
+      const basePay2=isContract2?Math.round(totalPay*1.1):totalPay;
+      const baseExp2=isContract2?Math.round(expTotal*1.1):expTotal;
+      const grandTotal2=basePay2+baseExp2;
+      const payDisplay=`¥${grandTotal2.toLocaleString()}${isContract2?' (税込)':''}`;
+      const typeChip=payType==='contract'?'<span class="chip blue" style="font-size:10px;">業務委託</span>':'<span class="chip green" style="font-size:10px;">給与</span>';
+      return `<tr>
+        <td class="mono">${year}年${mon}月</td>
+        <td class="mono">${fmtMs(totalMs)}</td>
+        <td class="mono right">¥${totalPay.toLocaleString()}</td>
+        <td class="mono right">${expTotal>0?'¥'+expTotal.toLocaleString():'--'}</td>
+        <td>${typeChip}</td>
+        <td class="mono right" style="font-weight:700;">${payDisplay}</td>
+      </tr>`;
+    }).join('');
+
+    const div=document.createElement('div');
+    div.className='card'; div.style.marginBottom='20px';
+    div.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <div class="avatar">${u.display[0]}</div><div class="u-name">${u.display}</div>
+      </div>
+      <table class="history-table">
+        <thead><tr><th>月</th><th>総実働</th><th class="right">賃金</th><th class="right">経費</th><th>種別</th><th class="right">支払額</th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="6" class="empty-note">データなし</td></tr>'}</tbody>
+      </table>`;
+    container.appendChild(div);
+  });
+}
+
+// ── ADMIN EXPENSES ──
+function renderAdminExpenses(){
+  const userFilter=document.getElementById('expUserFilter').value;
+  const statusFilter=document.getElementById('expStatusFilter').value;
+  const container=document.getElementById('adminExpenseList');
+  const typeLabel={transport:'交通費',expense:'経費'};
+
+  let items=[];
+  const targets=userFilter?REGULAR_USERS.filter(u=>u.username===userFilter):REGULAR_USERS;
+  targets.forEach(u=>{
+    loadExpenses(u.username).forEach(e=>items.push({...e,username:u.username,display:u.display}));
+  });
+  if(statusFilter) items=items.filter(e=>e.status===statusFilter);
+  items.sort((a,b)=>b.submittedAt.localeCompare(a.submittedAt));
+
+  if(!items.length){container.innerHTML='<div class="empty-note">申請がありません</div>';return;}
+  container.innerHTML='<div class="expense-list">'+items.map(e=>`
+    <div class="expense-item" style="cursor:pointer;" onclick="openExpenseModal('${e.username}','${e.id}')">
+      <div style="margin-right:10px;"><div class="avatar" style="background:var(--blue)">${e.display[0]}</div></div>
+      <div class="ei-meta">
+        <div class="ei-title">${e.display} — ${e.title} <span class="chip ${e.type==='transport'?'blue':'amber'}">${typeLabel[e.type]||e.type}</span></div>
+        <div class="ei-detail">${e.date}${e.note?' / '+e.note:''}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="ei-amount">¥${e.amount.toLocaleString()}</div>
+        <div style="margin-top:4px;"><span class="expense-status ${e.status}">${statusLabel(e.status)}</span></div>
+      </div>
+    </div>`).join('')+'</div>';
+}
+
+function openExpenseModal(username,expId){
+  const list=loadExpenses(username);
+  const e=list.find(x=>x.id===expId);
+  if(!e) return;
+  const u=REGULAR_USERS.find(x=>x.username===username);
+  const typeLabel={transport:'交通費',expense:'経費'};
+  document.getElementById('expenseModalBody').innerHTML=`
+    <div class="info-row"><span class="key">申請者</span><span class="val">${u.display}</span></div>
+    <div class="info-row"><span class="key">日付</span><span class="val">${e.date}</span></div>
+    <div class="info-row"><span class="key">種別</span><span class="val">${typeLabel[e.type]||e.type}</span></div>
+    <div class="info-row"><span class="key">件名</span><span class="val">${e.title}</span></div>
+    <div class="info-row"><span class="key">金額</span><span class="val">¥${e.amount.toLocaleString()}</span></div>
+    ${e.note?`<div class="info-row"><span class="key">備考</span><span class="val">${e.note}</span></div>`:''}
+    <div class="info-row"><span class="key">ステータス</span><span class="val"><span class="expense-status ${e.status}">${statusLabel(e.status)}</span></span></div>`;
+  const actions=document.getElementById('expenseModalActions');
+  if(e.status==='pending'){
+    actions.innerHTML=`
+      <button class="btn-ghost" onclick="closeModal('expenseModal')">閉じる</button>
+      <button class="btn-danger" onclick="updateExpense('${username}','${expId}','rejected')">却下</button>
+      <button class="btn-primary" onclick="updateExpense('${username}','${expId}','approved')">承認</button>`;
+  } else {
+    actions.innerHTML=`
+      <button class="btn-ghost" onclick="closeModal('expenseModal')">閉じる</button>
+      <button class="btn-sm" onclick="updateExpense('${username}','${expId}','pending')">承認待ちに戻す</button>`;
+  }
+  document.getElementById('expenseModal').classList.add('open');
+}
+
+// updateExpense → GAS層に置き換え済み
+
+// ── SETTINGS ──
+function renderSettings(){
+  const container=document.getElementById('settingsContent');
+  container.innerHTML=REGULAR_USERS.map(u=>{
+    const s=loadUserSettings(u.username);
+    const history=[...s.wageHistory].sort((a,b)=>b.from.localeCompare(a.from)); // 新しい順
+    const currentWage=history[0]?.wage||1800;
+
+    const historyRows=history.map(h=>`
+      <tr>
+        <td style="font-family:var(--mono);">${h.from.replace('-','年')}月〜</td>
+        <td style="font-family:var(--mono);font-weight:600;">¥${h.wage.toLocaleString()}</td>
+        <td style="text-align:right;">
+          ${history.length>1
+            ? `<button class="btn-sm" style="color:var(--red);border-color:var(--red);"
+                onclick="removeWageHistory('${u.username}','${h.from}')">削除</button>`
+            : '<span style="font-size:11px;color:var(--text3);">初期設定</span>'}
+        </td>
+      </tr>`).join('');
+
+    return `<div class="card" style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+        <div class="avatar">${u.display[0]}</div>
+        <div><div class="u-name">${u.display}</div>
+          <div style="font-size:11px;color:var(--text3);">@${u.username} ／ 現在の時給: <strong>¥${currentWage.toLocaleString()}</strong></div>
+        </div>
+      </div>
+
+      <div class="field"><label>支払い種別</label>
+        <select onchange="changePayType('${u.username}',this.value)" style="max-width:220px;">
+          <option value="salary" ${s.paymentType==='salary'?'selected':''}>給与</option>
+          <option value="contract" ${s.paymentType==='contract'?'selected':''}>業務委託費</option>
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">業務委託費の場合、給与・経費ともに × 1.1（税込）で計算されます。</div>
+      </div>
+
+      <hr class="divider">
+      <div class="section-label" style="margin-bottom:12px;">時給履歴・給与改定</div>
+
+      <table class="salary-table" style="margin-bottom:16px;">
+        <thead><tr><th>適用開始月</th><th>時給</th><th></th></tr></thead>
+        <tbody>${historyRows}</tbody>
+      </table>
+
+      <div style="background:var(--surface2);border-radius:10px;padding:14px 16px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin-bottom:10px;">給与改定を追加</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">適用開始月</div>
+            <input type="month" id="wageFromMonth_${u.username}"
+              style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--sans);font-size:13px;background:var(--surface);outline:none;">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">新しい時給（円）</div>
+            <input type="number" id="wageNewVal_${u.username}" min="1" placeholder="例: 1900"
+              style="width:120px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:13px;background:var(--surface);outline:none;">
+          </div>
+          <div style="margin-top:18px;">
+            <button class="btn-primary"
+              onclick="addWageHistory('${u.username}', document.getElementById('wageFromMonth_${u.username}').value, document.getElementById('wageNewVal_${u.username}').value)">
+              改定を追加
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// EDIT / ADD MODAL (punches)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let editCtx=null,addCtx=null;
+
+function saveLog(){
+  if(!editCtx) return;
+  const {username, logId} = editCtx;
+  const day=loadDay(username,adminDate);
+  const log=day.logs.find(l=>l.id===logId);
+  if(!log) return;
+  log.type=document.getElementById('editType').value;
+  const t=document.getElementById('editTime').value;
+  log.timeStr=t+':00';
+  const [h,m]=t.split(':').map(Number);
+  const dt=new Date(adminDate); dt.setHours(h,m,0,0); log.ts=dt.toISOString();
+  recomputeState(day); saveDay(username,adminDate,day);
+  closeModal('editModal'); renderDaily(); showToast('打刻を更新しました');
+}
+
+// 編集モーダルに「翌日退勤として分割記録」ボタンを表示するかチェック
+// → editModalのアクションに「日付跨ぎ分割」ボタンを動的追加
+function openEditModal(username,logId){
+  const day=loadDay(username,adminDate);
+  const log=day.logs.find(l=>l.id===logId);
+  if(!log) return;
+  editCtx={username,logId};
+  document.getElementById('modalTitle').textContent=`打刻を編集 — ${adminDate}`;
+  document.getElementById('editType').value=log.type;
+  document.getElementById('editTime').value=log.timeStr.slice(0,5);
+  document.getElementById('editModal').classList.add('open');
+}
+function showDeleteConfirm(){
+  document.getElementById('editFormArea').style.display='none';
+  document.getElementById('deleteConfirmArea').style.display='block';
+}
+function hideDeleteConfirm(){
+  document.getElementById('deleteConfirmArea').style.display='none';
+  document.getElementById('editFormArea').style.display='block';
+}
+function executeDeleteLog(){
+  if(!editCtx) return;
+  const username=editCtx.username;
+  const logId=editCtx.logId;
+  const day=loadDay(username,adminDate);
+  day.logs=day.logs.filter(l=>l.id!==logId);
+  recomputeState(day); saveDay(username,adminDate,day);
+  closeModal('editModal'); renderDaily(); showToast('打刻を削除しました');
+}
+function deleteLog(){ showDeleteConfirm(); }
+function openAddModal(username){
+  addCtx={username};
+  document.getElementById('addTime').value=new Date().toTimeString().slice(0,5);
+  document.getElementById('addType').value='in';
+  document.getElementById('isCrossDay').checked=false;
+  document.getElementById('crossDayOption').style.display='none';
+  document.getElementById('crossDayDetail').style.display='none';
+  document.getElementById('addModalTitle').textContent=`打刻を追加 — ${adminDate}`;
+  document.getElementById('addModal').classList.add('open');
+}
+function onAddTypeChange(){
+  const type=document.getElementById('addType').value;
+  const opt=document.getElementById('crossDayOption');
+  opt.style.display=(type==='out')?'block':'none';
+  if(type!=='out'){
+    document.getElementById('isCrossDay').checked=false;
+    document.getElementById('crossDayDetail').style.display='none';
+  }
+}
+function onCrossDayChange(){
+  const checked=document.getElementById('isCrossDay').checked;
+  document.getElementById('crossDayDetail').style.display=checked?'block':'none';
+  if(checked) updateCrossDayPreview();
+}
+function updateCrossDayPreview(){
+  const t=document.getElementById('addTime').value||'00:30';
+  // adminDate の翌日を計算
+  const nextDate=getNextDate(adminDate);
+  document.getElementById('crossDayPreview').innerHTML=
+    `① ${adminDate} 23:59:59.999 退勤（自動）<br>`+
+    `② ${nextDate} 00:00:00.000 出勤（自動）<br>`+
+    `③ ${nextDate} ${t}:00 退勤`;
+}
+function getNextDate(dateStr){
+  const d=new Date(dateStr); d.setDate(d.getDate()+1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// 日付跨ぎ分割処理: 前日に23:59退勤 + 翌日に00:00出勤・指定時刻退勤
+function applyMidnightSplit(username, prevDate, nextDate, outTimeStr){
+  const [h,m]=outTimeStr.split(':').map(Number);
+
+  // 前日: 休憩中なら休憩終了→退勤
+  const prevDay=loadDay(username,prevDate);
+  if(prevDay.state==='break'){
+    const endBreakTs=new Date(prevDate+'T23:59:58.999').toISOString();
+    prevDay.logs.push({id:uid(),type:'return',timeStr:'23:59:58.999',ts:endBreakTs});
+    if(prevDay.breakStart){
+      prevDay.totalBreak+=new Date(endBreakTs)-new Date(prevDay.breakStart);
+      prevDay.breakStart=null;
+    }
+  }
+  const autoOutTs=new Date(prevDate+'T23:59:59.999').toISOString();
+  prevDay.logs.push({id:uid(),type:'out',timeStr:'23:59:59.999',ts:autoOutTs});
+  recomputeState(prevDay);
+  saveDay(username,prevDate,prevDay);
+
+  // 翌日: 00:00出勤 + 指定時刻退勤
+  const nextDay=loadDay(username,nextDate);
+  const autoInTs=new Date(nextDate+'T00:00:00.000').toISOString();
+  nextDay.logs.push({id:uid(),type:'in',timeStr:'00:00:00.000',ts:autoInTs});
+  const outDt=new Date(nextDate); outDt.setHours(h,m,0,0);
+  nextDay.logs.push({id:uid(),type:'out',timeStr:outTimeStr+':00',ts:outDt.toISOString()});
+  recomputeState(nextDay);
+  saveDay(username,nextDate,nextDay);
+}
+
+function confirmAddLog(){
+  if(!addCtx) return;
+  const type=document.getElementById('addType').value;
+  const t=document.getElementById('addTime').value;
+  const isCrossDay=document.getElementById('isCrossDay').checked;
+
+  if(type==='out' && isCrossDay){
+    // 日付跨ぎモード: 分割処理
+    const nextDate=getNextDate(adminDate);
+    applyMidnightSplit(addCtx.username, adminDate, nextDate, t);
+    closeModal('addModal');
+    // 表示は翌日に切り替えて確認できるように
+    adminDate=nextDate;
+    document.getElementById('adminDatePicker').value=adminDate;
+    renderDaily();
+    showToast(`日付跨ぎを分割記録しました（${adminDate}に表示切替）`);
+    return;
+  }
+
+  const [h,m]=t.split(':').map(Number);
+  const dt=new Date(adminDate); dt.setHours(h,m,0,0);
+  const day=loadDay(addCtx.username,adminDate);
+  day.logs.push({id:uid(),type,timeStr:t+':00',ts:dt.toISOString()});
+  recomputeState(day); saveDay(addCtx.username,adminDate,day);
+  closeModal('addModal'); renderDaily(); showToast('打刻を追加しました');
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  if(id==='editModal'){
+    editCtx=null;
+    // 削除確認パネルをリセット
+    const fa=document.getElementById('editFormArea');
+    const da=document.getElementById('deleteConfirmArea');
+    if(fa) fa.style.display='block';
+    if(da) da.style.display='none';
+  }
+  if(id==='addModal') addCtx=null;
+}
+['editModal','addModal','expenseModal','holidayModal'].forEach(id=>{
+  document.getElementById(id).addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal(id);});
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// HELPERS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function calcWorkFromLogs(logs,now){
+  const sorted=[...logs].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+  let workMs=0,currentIn=null,breakStart=null,pendingBreak=0;
+  for(const l of sorted){
+    if(l.type==='in'){currentIn=new Date(l.ts);pendingBreak=0;breakStart=null;}
+    if(l.type==='out'&&currentIn){workMs+=Math.max(0,new Date(l.ts)-currentIn-pendingBreak);currentIn=null;pendingBreak=0;}
+    if(l.type==='break'){breakStart=new Date(l.ts);}
+    if(l.type==='return'&&breakStart){pendingBreak+=new Date(l.ts)-breakStart;breakStart=null;}
+  }
+  if(currentIn){const brk=pendingBreak+(breakStart?now-breakStart:0);workMs+=Math.max(0,now-currentIn-brk);}
+  return workMs;
+}
+function calcBreakMs(logs,now){
+  const sorted=[...logs].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+  let total=0,bs=null;
+  for(const l of sorted){
+    if(l.type==='break') bs=new Date(l.ts);
+    if(l.type==='return'&&bs){total+=new Date(l.ts)-bs;bs=null;}
+  }
+  if(bs) total+=now-bs;
+  return total;
+}
+function recomputeState(day){
+  const sorted=[...day.logs].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+  day.inTime=null;day.outTime=null;day.breakStart=null;day.totalBreak=0;day.state='out';
+  for(const l of sorted){
+    if(l.type==='in'){day.inTime=l.ts;day.state='in';day.outTime=null;}
+    if(l.type==='out'){day.outTime=l.ts;day.state='done';}
+    if(l.type==='break'){day.breakStart=l.ts;day.state='break';}
+    if(l.type==='return'){if(day.breakStart){day.totalBreak+=new Date(l.ts)-new Date(day.breakStart);day.breakStart=null;}day.state='in';}
+  }
+}
+function fmtMs(ms){
+  const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);
+  return `${h}:${String(m).padStart(2,'0')}`;
+}
+function fmtTime(ts){return ts?new Date(ts).toTimeString().slice(0,5):'--:--';}
+function min2h(min){
+  if(!min) return '--';
+  const h=Math.floor(min/60);const m=min%60;
+  return `${h}:${String(m).padStart(2,'0')}`;
+}
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// HOLIDAYS (手動祝日)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// holidays: [{date:"YYYY-MM-DD", name:"祝日名"}, ...]
+// loadHolidays → キャッシュ層に置き換え済み
+// saveHolidays → キャッシュ層に置き換え済み
+function isHolidayDate(dateStr){ return loadHolidays().some(h=>h.date===dateStr); }
+function getHolidayName(dateStr){
+  const h=loadHolidays().find(h=>h.date===dateStr);
+  return h?h.name:'';
+}
+function openHolidayModal(dateStr){
+  const existing=loadHolidays().find(h=>h.date===dateStr);
+  const d=new Date(dateStr);
+  const label=`${d.getMonth()+1}月${d.getDate()}日`;
+  document.getElementById('holidayModalTitle').textContent=existing?`祝日を編集 — ${label}`:`祝日に設定 — ${label}`;
+  document.getElementById('holidayModalBody').innerHTML=`
+    <div class="field" style="margin-bottom:12px;">
+      <label>祝日名</label>
+      <input type="text" id="holidayNameInput" placeholder="例：元日、文化の日"
+        value="${existing?existing.name:''}"
+        style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);
+          border-radius:8px;font-family:var(--sans);font-size:14px;outline:none;"
+        onkeydown="if(event.key==='Enter')confirmHoliday('${dateStr}')">
+    </div>
+    <div style="font-size:12px;color:var(--text3);">全ユーザーに適用されます。日曜日と同じ休日割増（135%/160%）で計算されます。</div>`;
+  const actions=document.getElementById('holidayModalActions');
+  if(existing){
+    actions.innerHTML=`
+      <button class="btn-ghost" onclick="closeModal('holidayModal')">キャンセル</button>
+      <button class="btn-danger" onclick="removeHoliday('${dateStr}')">祝日解除</button>
+      <button class="btn-primary" onclick="confirmHoliday('${dateStr}')">更新</button>`;
+  } else {
+    actions.innerHTML=`
+      <button class="btn-ghost" onclick="closeModal('holidayModal')">キャンセル</button>
+      <button class="btn-primary" onclick="confirmHoliday('${dateStr}')">祝日に設定</button>`;
+  }
+  document.getElementById('holidayModal').classList.add('open');
+  setTimeout(()=>document.getElementById('holidayNameInput').focus(), 80);
+}
+// confirmHoliday / removeHoliday → GAS層に置き換え済み
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// BONUS（賞与）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// loadBonus / saveBonus → GAS層に置き換え済み
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MAIL（アプリ内メッセージ）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// loadMails → キャッシュ層に置き換え済み
+// saveMails → キャッシュ層に置き換え済み
+// sendMail → GAS層に置き換え済み
+function updateMailBadge(){
+  const btn=document.getElementById('userTabBtnMailbox');
+  if(!btn||!currentUser) return;
+  const unread=loadMails(currentUser.username).filter(m=>!m.read).length;
+  const old=btn.querySelector('.pending-badge');
+  if(old) old.remove();
+  if(unread>0){
+    const b=document.createElement('span');
+    b.className='pending-badge';
+    b.textContent=unread>99?'99+':String(unread);
+    btn.appendChild(b);
+  }
+}
+function renderUserMailbox(){
+  const mails=loadMails(currentUser.username);
+  const el=document.getElementById('userMailList');
+  if(!mails.length){
+    el.innerHTML='<div class="empty-note">メッセージはありません</div>';
+    return;
+  }
+  const typeIcon={payment:'💳',bonus:'🎁',info:'📢'};
+  const typeColor={payment:'var(--green)',bonus:'var(--purple)',info:'var(--blue)'};
+  el.innerHTML=mails.map(m=>`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;
+      padding:16px 18px;margin-bottom:10px;border-left:4px solid ${typeColor[m.type]||typeColor.info};
+      opacity:${m.read?'0.7':'1'};">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="font-size:18px;">${typeIcon[m.type]||'📢'}</span>
+        <span style="font-weight:700;font-size:14px;">${m.subject}</span>
+        ${!m.read?'<span class="chip red" style="font-size:9px;padding:1px 6px;margin-left:auto;">NEW</span>':'<span style="font-size:11px;color:var(--text3);margin-left:auto;">既読</span>'}
+      </div>
+      <div style="font-size:13px;color:var(--text2);white-space:pre-line;line-height:1.7;">${m.body}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;">${new Date(m.sentAt).toLocaleString('ja-JP')}</div>
+    </div>`).join('');
+}
+// markMailsRead / markAllRead → GAS層に置き換え済み
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PAYMENT NOTICE（支払い通知）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function sendPaymentNotice(username, month, salaryPay, expTotal, bonus, payType){
+  const isContract=payType==='contract';
+  const taxNote=isContract?' (税込)':'';
+  const basePay=isContract?Math.round(salaryPay*1.1):salaryPay;
+  const baseExp=isContract?Math.round(expTotal*1.1):expTotal;
+  const baseBonus=isContract?Math.round(bonus*1.1):bonus;
+  const grand=basePay+baseExp+baseBonus;
+  const u=REGULAR_USERS.find(x=>x.username===username);
+  const [year,mon]=month.split('-').map(Number);
+  const label=isContract?'業務委託費':'給与';
+
+  let body=`${year}年${mon}月分の${label}をお支払いします。
+
+`;
+  body+=`【${label}${taxNote}】　¥${basePay.toLocaleString()}
+`;
+  if(expTotal>0) body+=`【経費${taxNote}】　¥${baseExp.toLocaleString()}
+`;
+  if(bonus>0) body+=`【賞与${taxNote}】　¥${baseBonus.toLocaleString()}
+`;
+  body+=`
+━━━━━━━━━━━━━━━
+`;
+  body+=`【支払い総額${taxNote}】　¥${grand.toLocaleString()}
+`;
+  body+=`
+ご確認ください。`;
+
+  sendMail(username, `${year}年${mon}月 支払い通知`, body, 'payment');
+  showToast(`${u.display} に支払い通知を送りました`);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// BONUS NOTICE（賞与通知）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function sendBonusNotice(username, month, bonus){
+  const settings=loadUserSettings(username);
+  const isContract=settings.paymentType==='contract';
+  const taxNote=isContract?' (税込)':'';
+  const baseBonus=isContract?Math.round(bonus*1.1):bonus;
+  const u=REGULAR_USERS.find(x=>x.username===username);
+  const [year,mon]=month.split('-').map(Number);
+
+  const body=`${year}年${mon}月分の賞与が決定しました。
+
+【賞与${taxNote}】　¥${baseBonus.toLocaleString()}
+
+おめでとうございます！引き続きよろしくお願いします。`;
+  sendMail(username, `🎁 ${year}年${mon}月 賞与のお知らせ`, body, 'bonus');
+  showToast(`${u.display} に賞与通知を送りました`);
+}
+
+// ── PENDING BADGE ──
+function updatePendingBadge(){
+  const count=REGULAR_USERS.reduce((n,u)=>n+loadExpenses(u.username).filter(e=>e.status==='pending').length,0);
+  const btn=document.getElementById('tabBtnExpenses');
+  if(!btn) return;
+  // 既存バッジ削除
+  const old=btn.querySelector('.pending-badge');
+  if(old) old.remove();
+  if(count>0){
+    const badge=document.createElement('span');
+    badge.className='pending-badge';
+    badge.textContent=count>99?'99+':String(count);
+    btn.appendChild(badge);
+  }
+}
+
+let toastTmr;
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTmr);toastTmr=setTimeout(()=>t.classList.remove('show'),2200);
+}
+</script>
+</body>
+</html>
