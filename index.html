@@ -1087,7 +1087,7 @@ async function showUser(){
   document.getElementById('topUser').textContent=currentUser.display;
   document.getElementById('expDate').value=todayStr();
   document.getElementById('userMonthPicker').value=nowMonthStr();
-  initUDay();
+  await initUDay();
   // 最新メールを取得
   try {
     _cache.mails[currentUser.username]=await loadMailsAsync(currentUser.username);
@@ -1095,10 +1095,65 @@ async function showUser(){
   renderUserUI(); startClock(); updateMailBadge(); showPage('userPage');
 }
 
-// uDayを今日の日付で初期化
-function initUDay(){
+// uDayを初期化（ログイン時に前日の未退勤も検知・自動処理）
+async function initUDay(){
   const today=todayStr();
-  uDay=loadDay(currentUser.username,today);
+
+  // 最大7日前まで未退勤の出勤ログを探す
+  for(let i=1; i<=7; i++){
+    const d=new Date();
+    d.setDate(d.getDate()-i);
+    const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    // Supabaseから直接取得（キャッシュにない場合もあるため）
+    let prevDay;
+    try { prevDay=await loadDayAsync(currentUser.username,ds); } catch(e){ continue; }
+    if(!prevDay||!prevDay.logs||prevDay.logs.length===0) continue;
+
+    if(prevDay.state==='in'||prevDay.state==='break'){
+      // 未退勤を発見 → 自動で23:59:59に退勤処理
+      if(prevDay.state==='break'){
+        const endBreakTs=new Date(ds+'T23:59:58.999').toISOString();
+        prevDay.logs.push({id:uid(),type:'return',timeStr:'23:59:58.999',ts:endBreakTs});
+        if(prevDay.breakStart){
+          prevDay.totalBreak+=new Date(endBreakTs)-new Date(prevDay.breakStart);
+          prevDay.breakStart=null;
+        }
+      }
+      const autoOutTs=new Date(ds+'T23:59:59.999').toISOString();
+      prevDay.logs.push({id:uid(),type:'out',timeStr:'23:59:59.999',ts:autoOutTs});
+      prevDay.state='done'; prevDay.outTime=autoOutTs;
+      _cache.days[`${currentUser.username}_${ds}`]=prevDay;
+      saveDay(currentUser.username,ds,prevDay);
+
+      // 翌日以降〜前日まで00:00出勤/23:59退勤を自動挿入
+      const nextD=new Date(ds);
+      while(true){
+        nextD.setDate(nextD.getDate()+1);
+        const nextDs=`${nextD.getFullYear()}-${String(nextD.getMonth()+1).padStart(2,'0')}-${String(nextD.getDate()).padStart(2,'0')}`;
+        if(nextDs>=today) break;
+        // 中間の日は00:00出勤→23:59退勤
+        const midDay=defaultDay();
+        const inTs=new Date(nextDs+'T00:00:00.000').toISOString();
+        const outTs=new Date(nextDs+'T23:59:59.999').toISOString();
+        midDay.logs.push({id:uid(),type:'in',timeStr:'00:00:00.000',ts:inTs});
+        midDay.logs.push({id:uid(),type:'out',timeStr:'23:59:59.999',ts:outTs});
+        midDay.state='done'; midDay.inTime=inTs; midDay.outTime=outTs;
+        _cache.days[`${currentUser.username}_${nextDs}`]=midDay;
+        saveDay(currentUser.username,nextDs,midDay);
+      }
+      showToast(`⚠ ${ds}の未退勤を検知。自動で退勤処理しました。`);
+      break;
+    }
+  }
+
+  // 今日のデータをロード（Supabaseから最新を取得）
+  try {
+    const todayData=await loadDayAsync(currentUser.username,today);
+    _cache.days[`${currentUser.username}_${today}`]=todayData;
+    uDay=todayData;
+  } catch(e){
+    uDay=loadDay(currentUser.username,today);
+  }
   uDayDate=today;
 }
 
