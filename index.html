@@ -1141,7 +1141,20 @@ async function initUDay(){
         _cache.days[`${currentUser.username}_${nextDs}`]=midDay;
         saveDay(currentUser.username,nextDs,midDay);
       }
-      showToast(`⚠ ${ds}の未退勤を検知。自動で退勤処理しました。`);
+      // 翌日（today）に00:00:00の自動出勤を追加
+      let todayDay;
+      try { todayDay=await loadDayAsync(currentUser.username,today); } catch(e){ todayDay=defaultDay(); }
+      // 今日にまだログがない場合のみ自動出勤を追加（既に手動で打刻済みの場合は追加しない）
+      if(!todayDay.logs || todayDay.logs.length===0){
+        const autoInTs=new Date(today+'T00:00:00.000').toISOString();
+        todayDay.logs=[{id:uid(),type:'in',timeStr:'00:00:00.000',ts:autoInTs}];
+        todayDay.state='in'; todayDay.inTime=autoInTs;
+        _cache.days[`${currentUser.username}_${today}`]=todayDay;
+        saveDay(currentUser.username,today,todayDay);
+        showToast(`⚠ ${ds}の未退勤を検知。自動で分割記録しました。`);
+      } else {
+        showToast(`⚠ ${ds}の未退勤を検知。自動で退勤処理しました。`);
+      }
       break;
     }
   }
